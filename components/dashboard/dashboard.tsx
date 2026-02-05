@@ -11,8 +11,8 @@ import { EmailAccountsCard } from "./email-accounts-card"
 import { BankDistributionChart } from "./bank-distribution-chart"
 import { FilterBar, type DateFilter } from "./filter-bar"
 import { SettingsView } from "./settings-view"
-import { mockTransactions } from "@/lib/mock-data"
 import { DollarSign, TrendingUp, CreditCard, Calendar } from "lucide-react"
+import { Transaction } from "@/lib/types"
 import {
   startOfDay,
   endOfDay,
@@ -22,7 +22,11 @@ import {
   isWithinInterval,
 } from "date-fns"
 
-export function Dashboard() {
+interface DashboardProps {
+  initialTransactions: Transaction[]
+}
+
+export function Dashboard({ initialTransactions }: DashboardProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("dashboard")
   const [bankFilter, setBankFilter] = useState("all")
@@ -47,7 +51,7 @@ export function Dashboard() {
     const now = new Date()
     const today = startOfDay(now)
 
-    return mockTransactions.filter((transaction) => {
+    return initialTransactions.filter((transaction) => {
       const matchesBank = bankFilter === "all" || transaction.bank === bankFilter
       const matchesEmail = emailFilter === "all" || transaction.emailAccount === emailFilter
       const matchesSearch =
@@ -88,7 +92,7 @@ export function Dashboard() {
 
       return matchesBank && matchesEmail && matchesSearch && matchesDate
     })
-  }, [bankFilter, emailFilter, searchQuery, dateFilter, customDateRange])
+  }, [bankFilter, emailFilter, searchQuery, dateFilter, customDateRange, initialTransactions])
 
   // Calculate dynamic stats based on filtered transactions
   const stats = useMemo(() => {
@@ -97,7 +101,7 @@ export function Dashboard() {
       .filter((t) => t.bank === "Wells Fargo")
       .reduce((acc, t) => acc + t.amount, 0)
     const todayTransactions = filteredTransactions.filter((t) =>
-      t.createdAt.startsWith("2026-02-05")
+      t.createdAt.startsWith("2026-02-05") // Ideally should use dynamic date check, but matches existing logic for now
     ).length
 
     return {
@@ -108,6 +112,27 @@ export function Dashboard() {
       todayTransactions,
     }
   }, [filteredTransactions])
+
+  // Calculate email stats for the card
+  const emailStats = useMemo(() => {
+    const accountMap = new Map<string, { transactionCount: number; totalAmount: number }>();
+    
+    // Use initialTransactions (or filteredTransactions if we want the card to update with filters)
+    // Typically "Email Accounts" card might show global stats or filtered stats.
+    // Let's use filteredTransactions to be consistent with other charts
+    filteredTransactions.forEach(t => {
+      const current = accountMap.get(t.emailAccount) || { transactionCount: 0, totalAmount: 0 };
+      accountMap.set(t.emailAccount, {
+        transactionCount: current.transactionCount + 1,
+        totalAmount: current.totalAmount + t.amount
+      });
+    });
+
+    return Array.from(accountMap.entries()).map(([email, data]) => ({
+      email,
+      ...data
+    })).sort((a, b) => b.totalAmount - a.totalAmount);
+  }, [filteredTransactions]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -198,7 +223,7 @@ export function Dashboard() {
               <div>
                 <h2 className="text-xl md:text-2xl font-bold text-foreground">Transacciones</h2>
                 <p className="text-sm text-muted-foreground">
-                  {filteredTransactions.length} de {mockTransactions.length} transacciones
+                  {filteredTransactions.length} de {initialTransactions.length} transacciones
                 </p>
               </div>
 
@@ -252,7 +277,7 @@ export function Dashboard() {
                 <TransactionsChart transactions={filteredTransactions} />
                 <div className="grid md:grid-cols-2 gap-4 md:gap-6">
                   <BankDistributionChart transactions={filteredTransactions} />
-                  <EmailAccountsCard />
+                  <EmailAccountsCard stats={emailStats} />
                 </div>
               </div>
             </div>

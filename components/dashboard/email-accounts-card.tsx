@@ -1,10 +1,19 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { emailAccounts } from "@/lib/mock-data"
 import { Mail } from "lucide-react"
 
-export function EmailAccountsCard() {
+type EmailAccountStat = {
+  email: string
+  transactionCount: number
+  totalAmount: number
+}
+
+interface EmailAccountsCardProps {
+  stats: EmailAccountStat[]
+}
+
+export function EmailAccountsCard({ stats }: EmailAccountsCardProps) {
   const formatAmount = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -22,7 +31,7 @@ export function EmailAccountsCard() {
         <p className="text-xs md:text-sm text-muted-foreground">Actividad por cuenta</p>
       </CardHeader>
       <CardContent className="space-y-3">
-        {emailAccounts.map((account) => (
+        {stats.map((account) => (
           <div
             key={account.email}
             className="flex items-center justify-between p-3 rounded-lg bg-secondary/50"
