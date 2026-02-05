@@ -9,10 +9,18 @@ import { TransactionCard } from "./transaction-card"
 import { TransactionsChart } from "./transactions-chart"
 import { EmailAccountsCard } from "./email-accounts-card"
 import { BankDistributionChart } from "./bank-distribution-chart"
-import { FilterBar } from "./filter-bar"
+import { FilterBar, type DateFilter } from "./filter-bar"
 import { SettingsView } from "./settings-view"
 import { mockTransactions, stats } from "@/lib/mock-data"
 import { DollarSign, TrendingUp, CreditCard, Calendar } from "lucide-react"
+import {
+  startOfDay,
+  endOfDay,
+  subDays,
+  subWeeks,
+  subMonths,
+  isWithinInterval,
+} from "date-fns"
 
 export function Dashboard() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -20,6 +28,11 @@ export function Dashboard() {
   const [bankFilter, setBankFilter] = useState("all")
   const [emailFilter, setEmailFilter] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all")
+  const [customDateRange, setCustomDateRange] = useState<{
+    from: Date | undefined
+    to: Date | undefined
+  }>({ from: undefined, to: undefined })
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -31,6 +44,9 @@ export function Dashboard() {
   }
 
   const filteredTransactions = useMemo(() => {
+    const now = new Date()
+    const today = startOfDay(now)
+
     return mockTransactions.filter((transaction) => {
       const matchesBank = bankFilter === "all" || transaction.bank === bankFilter
       const matchesEmail = emailFilter === "all" || transaction.emailAccount === emailFilter
@@ -38,9 +54,41 @@ export function Dashboard() {
         searchQuery === "" ||
         transaction.senderName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         transaction.confirmationCode.toLowerCase().includes(searchQuery.toLowerCase())
-      return matchesBank && matchesEmail && matchesSearch
+
+      // Date filtering
+      let matchesDate = true
+      const transactionDate = new Date(transaction.date)
+
+      if (dateFilter === "today") {
+        matchesDate = isWithinInterval(transactionDate, {
+          start: today,
+          end: endOfDay(now),
+        })
+      } else if (dateFilter === "yesterday") {
+        const yesterday = subDays(today, 1)
+        matchesDate = isWithinInterval(transactionDate, {
+          start: yesterday,
+          end: endOfDay(yesterday),
+        })
+      } else if (dateFilter === "week") {
+        matchesDate = isWithinInterval(transactionDate, {
+          start: subWeeks(today, 1),
+          end: endOfDay(now),
+        })
+      } else if (dateFilter === "month") {
+        matchesDate = isWithinInterval(transactionDate, {
+          start: subMonths(today, 1),
+          end: endOfDay(now),
+        })
+      } else if (dateFilter === "custom" && customDateRange.from) {
+        const start = startOfDay(customDateRange.from)
+        const end = customDateRange.to ? endOfDay(customDateRange.to) : endOfDay(now)
+        matchesDate = isWithinInterval(transactionDate, { start, end })
+      }
+
+      return matchesBank && matchesEmail && matchesSearch && matchesDate
     })
-  }, [bankFilter, emailFilter, searchQuery])
+  }, [bankFilter, emailFilter, searchQuery, dateFilter, customDateRange])
 
   return (
     <div className="min-h-screen bg-background">
@@ -123,6 +171,10 @@ export function Dashboard() {
                 setEmailFilter={setEmailFilter}
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
+                dateFilter={dateFilter}
+                setDateFilter={setDateFilter}
+                customDateRange={customDateRange}
+                setCustomDateRange={setCustomDateRange}
               />
 
               <div className="grid gap-3">
