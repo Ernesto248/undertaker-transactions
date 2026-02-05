@@ -1,27 +1,55 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { stats, emailAccounts } from "@/lib/mock-data"
+import type { Transaction } from "@/lib/mock-data"
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts"
 import { Building2, Mail } from "lucide-react"
 
 type ViewMode = "bank" | "email"
 
-const bankData = [
-  { name: "Wells Fargo", value: stats.wellsFargoTotal, color: "hsl(38, 92%, 50%)" },
-  { name: "Bank of America", value: stats.bankOfAmericaTotal, color: "hsl(199, 89%, 48%)" },
-]
+interface BankDistributionChartProps {
+  transactions: Transaction[]
+}
 
-const emailData = emailAccounts.map((account, index) => ({
-  name: account.email,
-  value: account.totalAmount,
-  color: index === 0 ? "hsl(142, 71%, 45%)" : index === 1 ? "hsl(270, 70%, 60%)" : "hsl(340, 75%, 55%)",
-}))
-
-export function BankDistributionChart() {
+export function BankDistributionChart({ transactions }: BankDistributionChartProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("bank")
+
+  const bankData = useMemo(() => {
+    const wellsFargoTotal = transactions
+      .filter((t) => t.bank === "Wells Fargo")
+      .reduce((sum, t) => sum + t.amount, 0)
+
+    const bankOfAmericaTotal = transactions
+      .filter((t) => t.bank === "Bank of America")
+      .reduce((sum, t) => sum + t.amount, 0)
+
+    return [
+      { name: "Wells Fargo", value: wellsFargoTotal, color: "hsl(38, 92%, 50%)" },
+      { name: "Bank of America", value: bankOfAmericaTotal, color: "hsl(199, 89%, 48%)" },
+    ]
+  }, [transactions])
+
+  const emailData = useMemo(() => {
+    const personalTotal = transactions
+      .filter((t) => t.emailAccount === "personal@gmail.com")
+      .reduce((sum, t) => sum + t.amount, 0)
+
+    const businessTotal = transactions
+      .filter((t) => t.emailAccount === "business@gmail.com")
+      .reduce((sum, t) => sum + t.amount, 0)
+
+    const workTotal = transactions
+      .filter((t) => t.emailAccount === "work@gmail.com")
+      .reduce((sum, t) => sum + t.amount, 0)
+
+    return [
+      { name: "personal@gmail.com", value: personalTotal, color: "hsl(142, 71%, 45%)" },
+      { name: "business@gmail.com", value: businessTotal, color: "hsl(270, 70%, 60%)" },
+      { name: "work@gmail.com", value: workTotal, color: "hsl(340, 75%, 55%)" },
+    ]
+  }, [transactions])
 
   const data = viewMode === "bank" ? bankData : emailData
 

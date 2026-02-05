@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { chartDataByBank, chartDataByEmail } from "@/lib/mock-data"
+import type { Transaction } from "@/lib/mock-data"
 import {
   AreaChart,
   Area,
@@ -15,11 +15,78 @@ import {
   Legend,
 } from "recharts"
 import { Building2, Mail } from "lucide-react"
+import { format, parseISO, startOfDay, eachDayOfInterval, subDays } from "date-fns"
+import { es } from "date-fns/locale"
 
 type ViewMode = "bank" | "email"
 
-export function TransactionsChart() {
+interface TransactionsChartProps {
+  transactions: Transaction[]
+}
+
+export function TransactionsChart({ transactions }: TransactionsChartProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("bank")
+
+  const chartDataByBank = useMemo(() => {
+    const endDate = new Date()
+    const startDate = subDays(endDate, 6)
+    const days = eachDayOfInterval({ start: startDate, end: endDate })
+
+    return days.map((day) => {
+      const dayStart = startOfDay(day)
+      const dayTransactions = transactions.filter((t) => {
+        const txDate = startOfDay(parseISO(t.createdAt))
+        return txDate.getTime() === dayStart.getTime()
+      })
+
+      const wellsFargo = dayTransactions
+        .filter((t) => t.bank === "Wells Fargo")
+        .reduce((sum, t) => sum + t.amount, 0)
+
+      const bankOfAmerica = dayTransactions
+        .filter((t) => t.bank === "Bank of America")
+        .reduce((sum, t) => sum + t.amount, 0)
+
+      return {
+        date: format(day, "dd MMM", { locale: es }),
+        wellsFargo,
+        bankOfAmerica,
+      }
+    })
+  }, [transactions])
+
+  const chartDataByEmail = useMemo(() => {
+    const endDate = new Date()
+    const startDate = subDays(endDate, 6)
+    const days = eachDayOfInterval({ start: startDate, end: endDate })
+
+    return days.map((day) => {
+      const dayStart = startOfDay(day)
+      const dayTransactions = transactions.filter((t) => {
+        const txDate = startOfDay(parseISO(t.createdAt))
+        return txDate.getTime() === dayStart.getTime()
+      })
+
+      const personal = dayTransactions
+        .filter((t) => t.emailAccount === "personal@gmail.com")
+        .reduce((sum, t) => sum + t.amount, 0)
+
+      const business = dayTransactions
+        .filter((t) => t.emailAccount === "business@gmail.com")
+        .reduce((sum, t) => sum + t.amount, 0)
+
+      const work = dayTransactions
+        .filter((t) => t.emailAccount === "work@gmail.com")
+        .reduce((sum, t) => sum + t.amount, 0)
+
+      return {
+        date: format(day, "dd MMM", { locale: es }),
+        personal,
+        business,
+        work,
+      }
+    })
+  }, [transactions])
 
   const chartData = viewMode === "bank" ? chartDataByBank : chartDataByEmail
 
