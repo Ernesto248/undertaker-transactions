@@ -1,10 +1,10 @@
 'use server';
 
-import pool from '@/lib/db';
+import { getPool } from "@/lib/db"
 import { Transaction } from '@/lib/types';
 
 export async function getTransactions(): Promise<Transaction[]> {
-  const client = await pool.connect();
+  const client = await getPool().connect()
   try {
     const query = `
       SELECT 

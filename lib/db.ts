@@ -1,7 +1,16 @@
-import { Pool } from '@neondatabase/serverless';
+import { Pool } from "@neondatabase/serverless"
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+let pool: Pool | null = null
 
-export default pool;
+export function getPool() {
+  const connectionString = process.env.DATABASE_URL
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is not set")
+  }
+
+  if (!pool) {
+    pool = new Pool({ connectionString })
+  }
+
+  return pool
+}

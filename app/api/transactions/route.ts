@@ -1,5 +1,5 @@
 import { z } from "zod"
-import pool from "@/lib/db"
+import { getPool } from "@/lib/db"
 
 export const runtime = "nodejs"
 
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: "validation_error", details: { amount: ["invalid_number"] } }, { status: 400 })
   }
 
-  const client = await pool.connect()
+  const client = await getPool().connect()
   try {
     await client.query("BEGIN")
 
