@@ -146,7 +146,7 @@ export function FilterBar({
             {/* Date filter buttons */}
             <div className="space-y-2">
               <span className="text-sm font-medium text-muted-foreground">Fecha</span>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-3 sm:flex sm:flex-wrap gap-2">
                 {dateFilterOptions.map((option) => (
                   <Button
                     key={option.value}
@@ -159,7 +159,7 @@ export function FilterBar({
                       }
                     }}
                     className={cn(
-                      "text-xs",
+                      "text-xs h-9 px-2 sm:px-3",
                       dateFilter === option.value
                         ? "bg-primary text-primary-foreground"
                         : "bg-transparent border-border text-muted-foreground hover:text-foreground"
