@@ -50,7 +50,7 @@ export function BankDistributionChart() {
               className="h-7 px-2 text-xs gap-1"
             >
               <Building2 className="h-3 w-3" />
-              <span className="hidden sm:inline">Banco</span>
+              <span>Banco</span>
             </Button>
             <Button
               variant={viewMode === "email" ? "default" : "ghost"}
@@ -59,7 +59,7 @@ export function BankDistributionChart() {
               className="h-7 px-2 text-xs gap-1"
             >
               <Mail className="h-3 w-3" />
-              <span className="hidden sm:inline">Email</span>
+              <span>Email</span>
             </Button>
           </div>
         </div>
