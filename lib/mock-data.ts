@@ -134,7 +134,7 @@ export const mockTransactions: Transaction[] = [
   }
 ]
 
-export const chartData = [
+export const chartDataByBank = [
   { date: "30 Ene", wellsFargo: 2400, bankOfAmerica: 1800 },
   { date: "31 Ene", wellsFargo: 1800, bankOfAmerica: 3200 },
   { date: "01 Feb", wellsFargo: 2750, bankOfAmerica: 890 },
@@ -142,6 +142,16 @@ export const chartData = [
   { date: "03 Feb", wellsFargo: 1875, bankOfAmerica: 620 },
   { date: "04 Feb", wellsFargo: 950, bankOfAmerica: 6300 },
   { date: "05 Feb", wellsFargo: 2030, bankOfAmerica: 3500 },
+]
+
+export const chartDataByEmail = [
+  { date: "30 Ene", personal: 1200, business: 1800, work: 1200 },
+  { date: "31 Ene", personal: 2100, business: 1400, work: 1500 },
+  { date: "01 Feb", personal: 0, business: 2750, work: 890 },
+  { date: "02 Feb", personal: 1450, business: 0, work: 3100 },
+  { date: "03 Feb", personal: 1875, business: 620, work: 0 },
+  { date: "04 Feb", personal: 2100, business: 950, work: 4200 },
+  { date: "05 Feb", personal: 1250, business: 3500, work: 780 },
 ]
 
 export const emailAccounts = [
