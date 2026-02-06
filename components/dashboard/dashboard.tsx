@@ -1,20 +1,20 @@
-"use client"
+"use client";
 
-import { useState, useMemo } from "react"
-import { Header } from "./header"
-import { MobileNav } from "./mobile-nav"
-import { BottomNav } from "./bottom-nav"
-import { DesktopNav } from "./desktop-nav"
-import { StatCard } from "./stat-card"
-import { TransactionCard } from "./transaction-card"
-import { TransactionsChart } from "./transactions-chart"
-import { EmailAccountsCard } from "./email-accounts-card"
-import { BankDistributionChart } from "./bank-distribution-chart"
-import { BankTotalsCard } from "./bank-totals-card"
-import { FilterBar, type DateFilter } from "./filter-bar"
-import { SettingsView } from "./settings-view"
-import { DollarSign, TrendingUp, Calendar } from "lucide-react"
-import { Transaction } from "@/lib/types"
+import { useState, useMemo } from "react";
+import { Header } from "./header";
+import { MobileNav } from "./mobile-nav";
+import { BottomNav } from "./bottom-nav";
+import { DesktopNav } from "./desktop-nav";
+import { StatCard } from "./stat-card";
+import { TransactionCard } from "./transaction-card";
+import { TransactionsChart } from "./transactions-chart";
+import { EmailAccountsCard } from "./email-accounts-card";
+import { BankDistributionChart } from "./bank-distribution-chart";
+import { BankTotalsCard } from "./bank-totals-card";
+import { FilterBar, type DateFilter } from "./filter-bar";
+import { SettingsView } from "./settings-view";
+import { DollarSign, TrendingUp, Calendar } from "lucide-react";
+import { Transaction } from "@/lib/types";
 import {
   startOfDay,
   endOfDay,
@@ -22,31 +22,35 @@ import {
   subWeeks,
   subMonths,
   isWithinInterval,
-} from "date-fns"
+} from "date-fns";
 
 interface DashboardProps {
-  initialTransactions: Transaction[]
+  initialTransactions: Transaction[];
 }
 
 export function Dashboard({ initialTransactions }: DashboardProps) {
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState("dashboard")
-  const [bankFilter, setBankFilter] = useState("all")
-  const [accountFilter, setAccountFilter] = useState("all")
-  const [searchQuery, setSearchQuery] = useState("")
-  const [dateFilter, setDateFilter] = useState<DateFilter>("all")
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("dashboard");
+  const [bankFilter, setBankFilter] = useState("all");
+  const [accountFilter, setAccountFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [customDateRange, setCustomDateRange] = useState<{
-    from: Date | undefined
-    to: Date | undefined
-  }>({ from: undefined, to: undefined })
+    from: Date | undefined;
+    to: Date | undefined;
+  }>({ from: undefined, to: undefined });
 
   const bankOptions = useMemo(() => {
-    return Array.from(new Set(initialTransactions.map((t) => t.bank))).sort((a, b) => a.localeCompare(b))
-  }, [initialTransactions])
+    return Array.from(new Set(initialTransactions.map((t) => t.bank))).sort(
+      (a, b) => a.localeCompare(b),
+    );
+  }, [initialTransactions]);
 
   const accountOptions = useMemo(() => {
-    return Array.from(new Set(initialTransactions.map((t) => t.accountName))).sort((a, b) => a.localeCompare(b))
-  }, [initialTransactions])
+    return Array.from(
+      new Set(initialTransactions.map((t) => t.accountName)),
+    ).sort((a, b) => a.localeCompare(b));
+  }, [initialTransactions]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -54,98 +58,132 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
       currency: "USD",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(amount)
-  }
+    }).format(amount);
+  };
 
   const filteredTransactions = useMemo(() => {
-    const now = new Date()
-    const today = startOfDay(now)
+    const now = new Date();
+    const today = startOfDay(now);
 
     return initialTransactions.filter((transaction) => {
-      const matchesBank = bankFilter === "all" || transaction.bank === bankFilter
-      const matchesAccount = accountFilter === "all" || transaction.accountName === accountFilter
+      const matchesBank =
+        bankFilter === "all" || transaction.bank === bankFilter;
+      const matchesAccount =
+        accountFilter === "all" || transaction.accountName === accountFilter;
       const matchesSearch =
         searchQuery === "" ||
-        transaction.senderName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        transaction.confirmationCode.toLowerCase().includes(searchQuery.toLowerCase())
+        transaction.senderName
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
+        transaction.confirmationCode
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase());
 
       // Date filtering
-      let matchesDate = true
-      const transactionDate = new Date(transaction.createdAt)
+      let matchesDate = true;
+      const transactionDate = new Date(transaction.createdAt);
 
       if (dateFilter === "today") {
         matchesDate = isWithinInterval(transactionDate, {
           start: today,
           end: endOfDay(now),
-        })
+        });
       } else if (dateFilter === "yesterday") {
-        const yesterday = subDays(today, 1)
+        const yesterday = subDays(today, 1);
         matchesDate = isWithinInterval(transactionDate, {
           start: yesterday,
           end: endOfDay(yesterday),
-        })
+        });
       } else if (dateFilter === "week") {
         matchesDate = isWithinInterval(transactionDate, {
           start: subWeeks(today, 1),
           end: endOfDay(now),
-        })
+        });
       } else if (dateFilter === "month") {
         matchesDate = isWithinInterval(transactionDate, {
           start: subMonths(today, 1),
           end: endOfDay(now),
-        })
+        });
       } else if (dateFilter === "custom" && customDateRange.from) {
-        const start = startOfDay(customDateRange.from)
-        const end = customDateRange.to ? endOfDay(customDateRange.to) : endOfDay(now)
-        matchesDate = isWithinInterval(transactionDate, { start, end })
+        const start = startOfDay(customDateRange.from);
+        const end = customDateRange.to
+          ? endOfDay(customDateRange.to)
+          : endOfDay(now);
+        matchesDate = isWithinInterval(transactionDate, { start, end });
       }
 
-      return matchesBank && matchesAccount && matchesSearch && matchesDate
-    })
-  }, [bankFilter, accountFilter, searchQuery, dateFilter, customDateRange, initialTransactions])
+      return matchesBank && matchesAccount && matchesSearch && matchesDate;
+    });
+  }, [
+    bankFilter,
+    accountFilter,
+    searchQuery,
+    dateFilter,
+    customDateRange,
+    initialTransactions,
+  ]);
 
   const baseFilteredTransactions = useMemo(() => {
     return initialTransactions.filter((transaction) => {
-      const matchesBank = bankFilter === "all" || transaction.bank === bankFilter
-      const matchesAccount = accountFilter === "all" || transaction.accountName === accountFilter
+      const matchesBank =
+        bankFilter === "all" || transaction.bank === bankFilter;
+      const matchesAccount =
+        accountFilter === "all" || transaction.accountName === accountFilter;
       const matchesSearch =
         searchQuery === "" ||
-        transaction.senderName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        transaction.confirmationCode.toLowerCase().includes(searchQuery.toLowerCase())
+        transaction.senderName
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
+        transaction.confirmationCode
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase());
 
-      return matchesBank && matchesAccount && matchesSearch
-    })
-  }, [bankFilter, accountFilter, searchQuery, initialTransactions])
+      return matchesBank && matchesAccount && matchesSearch;
+    });
+  }, [bankFilter, accountFilter, searchQuery, initialTransactions]);
 
   const toTrend = (current: number, previous: number) => {
-    if (!Number.isFinite(current) || !Number.isFinite(previous)) return undefined
-    if (previous === 0) return undefined
-    const change = ((current - previous) / previous) * 100
-    const rounded = Math.round(change * 10) / 10
-    const value = Object.is(rounded, -0) ? 0 : rounded
-    return { value, isPositive: value >= 0 }
-  }
+    if (!Number.isFinite(current) || !Number.isFinite(previous))
+      return undefined;
+    if (previous === 0) return undefined;
+    const change = ((current - previous) / previous) * 100;
+    const rounded = Math.round(change * 10) / 10;
+    const value = Object.is(rounded, -0) ? 0 : rounded;
+    return { value, isPositive: value >= 0 };
+  };
 
   // Calculate dynamic stats based on filtered transactions
   const stats = useMemo(() => {
-    const totalAmount = filteredTransactions.reduce((acc, t) => acc + t.amount, 0)
-    const avgTransaction = filteredTransactions.length > 0 ? totalAmount / filteredTransactions.length : 0
+    const totalAmount = filteredTransactions.reduce(
+      (acc, t) => acc + t.amount,
+      0,
+    );
+    const avgTransaction =
+      filteredTransactions.length > 0
+        ? totalAmount / filteredTransactions.length
+        : 0;
 
-    const now = new Date()
-    const todayStart = startOfDay(now)
-    const todayEnd = endOfDay(now)
-    const yesterdayStart = subDays(todayStart, 1)
-    const yesterdayEnd = endOfDay(yesterdayStart)
+    const now = new Date();
+    const todayStart = startOfDay(now);
+    const todayEnd = endOfDay(now);
+    const yesterdayStart = subDays(todayStart, 1);
+    const yesterdayEnd = endOfDay(yesterdayStart);
 
     const todayTx = baseFilteredTransactions.filter((t) =>
-      isWithinInterval(new Date(t.createdAt), { start: todayStart, end: todayEnd })
-    )
+      isWithinInterval(new Date(t.createdAt), {
+        start: todayStart,
+        end: todayEnd,
+      }),
+    );
     const yesterdayTx = baseFilteredTransactions.filter((t) =>
-      isWithinInterval(new Date(t.createdAt), { start: yesterdayStart, end: yesterdayEnd })
-    )
+      isWithinInterval(new Date(t.createdAt), {
+        start: yesterdayStart,
+        end: yesterdayEnd,
+      }),
+    );
 
-    const todayAmount = todayTx.reduce((acc, t) => acc + t.amount, 0)
-    const yesterdayAmount = yesterdayTx.reduce((acc, t) => acc + t.amount, 0)
+    const todayAmount = todayTx.reduce((acc, t) => acc + t.amount, 0);
+    const yesterdayAmount = yesterdayTx.reduce((acc, t) => acc + t.amount, 0);
 
     return {
       totalTransactions: filteredTransactions.length,
@@ -154,39 +192,50 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
       totalAmountTrend: toTrend(todayAmount, yesterdayAmount),
       todayTransactions: todayTx.length,
       todayTransactionsTrend: toTrend(todayTx.length, yesterdayTx.length),
-    }
-  }, [filteredTransactions, baseFilteredTransactions])
+    };
+  }, [filteredTransactions, baseFilteredTransactions]);
 
   const bankTotals = useMemo(() => {
-    const totals = new Map<string, number>()
-    filteredTransactions.forEach((t) => totals.set(t.bank, (totals.get(t.bank) ?? 0) + t.amount))
+    const totals = new Map<string, number>();
+    filteredTransactions.forEach((t) =>
+      totals.set(t.bank, (totals.get(t.bank) ?? 0) + t.amount),
+    );
     return Array.from(totals.entries())
       .map(([bank, totalAmount]) => ({ bank, totalAmount }))
-      .sort((a, b) => b.totalAmount - a.totalAmount)
-  }, [filteredTransactions])
+      .sort((a, b) => b.totalAmount - a.totalAmount);
+  }, [filteredTransactions]);
 
   const accountStats = useMemo(() => {
-    const accountMap = new Map<string, { transactionCount: number; totalAmount: number }>()
+    const accountMap = new Map<
+      string,
+      { transactionCount: number; totalAmount: number }
+    >();
 
     filteredTransactions.forEach((t) => {
-      const current = accountMap.get(t.accountName) || { transactionCount: 0, totalAmount: 0 }
+      const current = accountMap.get(t.accountName) || {
+        transactionCount: 0,
+        totalAmount: 0,
+      };
       accountMap.set(t.accountName, {
         transactionCount: current.transactionCount + 1,
         totalAmount: current.totalAmount + t.amount,
-      })
-    })
+      });
+    });
 
     return Array.from(accountMap.entries())
       .map(([accountName, data]) => ({
         accountName,
         ...data,
       }))
-      .sort((a, b) => b.totalAmount - a.totalAmount)
-  }, [filteredTransactions])
+      .sort((a, b) => b.totalAmount - a.totalAmount);
+  }, [filteredTransactions]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header onMenuToggle={() => setIsMenuOpen(!isMenuOpen)} isMenuOpen={isMenuOpen} />
+    <div className="min-h-screen bg-background overflow-x-hidden">
+      <Header
+        onMenuToggle={() => setIsMenuOpen(!isMenuOpen)}
+        isMenuOpen={isMenuOpen}
+      />
       <MobileNav
         isOpen={isMenuOpen}
         onClose={() => setIsMenuOpen(false)}
@@ -230,7 +279,10 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
                     subtitle="por transacción"
                     icon={TrendingUp}
                   />
-                <BankTotalsCard totals={bankTotals} formatCurrency={formatCurrency} />
+                  <BankTotalsCard
+                    totals={bankTotals}
+                    formatCurrency={formatCurrency}
+                  />
                   <StatCard
                     title="Hoy"
                     value={stats.todayTransactions.toString()}
@@ -253,11 +305,16 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
                   </h2>
                   <div className="grid gap-3">
                     {filteredTransactions.slice(0, 5).map((transaction) => (
-                      <TransactionCard key={transaction.id} transaction={transaction} />
+                      <TransactionCard
+                        key={transaction.id}
+                        transaction={transaction}
+                      />
                     ))}
                     {filteredTransactions.length === 0 && (
                       <div className="text-center py-12">
-                        <p className="text-muted-foreground">No se encontraron transacciones</p>
+                        <p className="text-muted-foreground">
+                          No se encontraron transacciones
+                        </p>
                       </div>
                     )}
                   </div>
@@ -268,9 +325,12 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
             {activeTab === "transactions" && (
               <div className="space-y-4">
                 <div>
-                  <h2 className="text-xl md:text-2xl font-bold text-foreground">Transacciones</h2>
+                  <h2 className="text-xl md:text-2xl font-bold text-foreground">
+                    Transacciones
+                  </h2>
                   <p className="text-sm text-muted-foreground">
-                    {filteredTransactions.length} de {initialTransactions.length} transacciones
+                    {filteredTransactions.length} de{" "}
+                    {initialTransactions.length} transacciones
                   </p>
                 </div>
 
@@ -291,11 +351,16 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
 
                 <div className="grid gap-3">
                   {filteredTransactions.map((transaction) => (
-                    <TransactionCard key={transaction.id} transaction={transaction} />
+                    <TransactionCard
+                      key={transaction.id}
+                      transaction={transaction}
+                    />
                   ))}
                   {filteredTransactions.length === 0 && (
                     <div className="text-center py-12">
-                      <p className="text-muted-foreground">No se encontraron transacciones</p>
+                      <p className="text-muted-foreground">
+                        No se encontraron transacciones
+                      </p>
                     </div>
                   )}
                 </div>
@@ -305,8 +370,12 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
             {activeTab === "analytics" && (
               <div className="space-y-4 md:space-y-6">
                 <div>
-                  <h2 className="text-xl md:text-2xl font-bold text-foreground">Análisis</h2>
-                  <p className="text-sm text-muted-foreground">Estadísticas detalladas</p>
+                  <h2 className="text-xl md:text-2xl font-bold text-foreground">
+                    Análisis
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Estadísticas detalladas
+                  </p>
                 </div>
 
                 <FilterBar
@@ -327,19 +396,23 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
                 <div className="grid gap-4 md:gap-6">
                   <TransactionsChart transactions={filteredTransactions} />
                   <div className="grid md:grid-cols-2 gap-4 md:gap-6">
-                    <BankDistributionChart transactions={filteredTransactions} />
+                    <BankDistributionChart
+                      transactions={filteredTransactions}
+                    />
                     <EmailAccountsCard stats={accountStats} />
                   </div>
                 </div>
               </div>
             )}
 
-            {activeTab === "settings" && <SettingsView accountOptions={accountOptions} />}
+            {activeTab === "settings" && (
+              <SettingsView accountOptions={accountOptions} />
+            )}
           </div>
         </div>
       </main>
 
       <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
     </div>
-  )
+  );
 }

@@ -39,7 +39,7 @@ export function TransactionCard({ transaction }: TransactionCardProps) {
       month: "short",
       hour: "2-digit",
       minute: "2-digit",
-      timeZone: "UTC",
+      timeZone: "America/Toronto",
     }).format(date)
   }
 
@@ -80,14 +80,19 @@ export function TransactionCard({ transaction }: TransactionCardProps) {
               <button
                 type="button"
                 onClick={copyToClipboard}
-                className="flex items-center gap-1 text-[10px] md:text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="flex items-center gap-1 max-w-full min-w-0 overflow-hidden text-[10px] md:text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 {copied ? (
                   <Check className="h-3 w-3 text-[hsl(var(--success))]" />
                 ) : (
                   <Copy className="h-3 w-3" />
                 )}
-                <span className="font-mono">{transaction.confirmationCode}</span>
+                <span
+                  className="font-mono truncate inline-block max-w-[150px] sm:max-w-[220px] md:max-w-none"
+                  title={transaction.confirmationCode}
+                >
+                  {transaction.confirmationCode}
+                </span>
               </button>
             </div>
             <p className="mt-2 text-[10px] md:text-xs text-muted-foreground">
