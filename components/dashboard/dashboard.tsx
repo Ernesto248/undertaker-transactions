@@ -31,6 +31,9 @@ interface DashboardProps {
 export function Dashboard({ initialTransactions }: DashboardProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [transactions, setTransactions] =
+    useState<Transaction[]>(initialTransactions);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [bankFilter, setBankFilter] = useState("all");
   const [accountFilter, setAccountFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -41,16 +44,32 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
   }>({ from: undefined, to: undefined });
 
   const bankOptions = useMemo(() => {
-    return Array.from(new Set(initialTransactions.map((t) => t.bank))).sort(
-      (a, b) => a.localeCompare(b),
+    return Array.from(new Set(transactions.map((t) => t.bank))).sort((a, b) =>
+      a.localeCompare(b),
     );
-  }, [initialTransactions]);
+  }, [transactions]);
 
   const accountOptions = useMemo(() => {
-    return Array.from(
-      new Set(initialTransactions.map((t) => t.accountName)),
-    ).sort((a, b) => a.localeCompare(b));
-  }, [initialTransactions]);
+    return Array.from(new Set(transactions.map((t) => t.accountName))).sort(
+      (a, b) => a.localeCompare(b),
+    );
+  }, [transactions]);
+
+  const refreshData = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await fetch("/api/transactions", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        ok?: boolean;
+        transactions?: Transaction[];
+      };
+      if (!data?.ok || !Array.isArray(data.transactions)) return;
+      setTransactions(data.transactions);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -65,7 +84,7 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
     const now = new Date();
     const today = startOfDay(now);
 
-    return initialTransactions.filter((transaction) => {
+    return transactions.filter((transaction) => {
       const matchesBank =
         bankFilter === "all" || transaction.bank === bankFilter;
       const matchesAccount =
@@ -120,11 +139,11 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
     searchQuery,
     dateFilter,
     customDateRange,
-    initialTransactions,
+    transactions,
   ]);
 
   const baseFilteredTransactions = useMemo(() => {
-    return initialTransactions.filter((transaction) => {
+    return transactions.filter((transaction) => {
       const matchesBank =
         bankFilter === "all" || transaction.bank === bankFilter;
       const matchesAccount =
@@ -140,7 +159,7 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
 
       return matchesBank && matchesAccount && matchesSearch;
     });
-  }, [bankFilter, accountFilter, searchQuery, initialTransactions]);
+  }, [bankFilter, accountFilter, searchQuery, transactions]);
 
   const toTrend = (current: number, previous: number) => {
     if (!Number.isFinite(current) || !Number.isFinite(previous))
@@ -235,6 +254,8 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
       <Header
         onMenuToggle={() => setIsMenuOpen(!isMenuOpen)}
         isMenuOpen={isMenuOpen}
+        onRefresh={refreshData}
+        isRefreshing={isRefreshing}
       />
       <MobileNav setActiveTab={setActiveTab} />
 
@@ -324,8 +345,8 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
                     Transacciones
                   </h2>
                   <p className="text-sm text-muted-foreground">
-                    {filteredTransactions.length} de{" "}
-                    {initialTransactions.length} transacciones
+                    {filteredTransactions.length} de {transactions.length}{" "}
+                    transacciones
                   </p>
                 </div>
 

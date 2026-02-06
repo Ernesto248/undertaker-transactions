@@ -1,6 +1,6 @@
 "use client"
 
-import { Activity, Bell, Menu, X } from "lucide-react"
+import { Activity, Bell, Menu, X, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useState } from "react"
@@ -8,9 +8,11 @@ import { useState } from "react"
 interface HeaderProps {
   onMenuToggle: () => void
   isMenuOpen: boolean
+  onRefresh?: () => void
+  isRefreshing?: boolean
 }
 
-export function Header({ onMenuToggle, isMenuOpen }: HeaderProps) {
+export function Header({ onMenuToggle, isMenuOpen, onRefresh, isRefreshing }: HeaderProps) {
   const [hasNotifications] = useState(true)
 
   return (
@@ -43,6 +45,16 @@ export function Header({ onMenuToggle, isMenuOpen }: HeaderProps) {
             <span className="h-2 w-2 rounded-full bg-[hsl(var(--success))] animate-pulse" />
             Sincronizado
           </Badge>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative"
+            onClick={onRefresh}
+            disabled={!onRefresh || isRefreshing}
+            aria-label="Refrescar"
+          >
+            <RefreshCw className={`h-5 w-5 ${isRefreshing ? "animate-spin" : ""}`} />
+          </Button>
           <Button variant="ghost" size="icon" className="relative">
             <Bell className="h-5 w-5" />
             {hasNotifications && (
