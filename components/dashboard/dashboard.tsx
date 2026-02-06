@@ -231,17 +231,12 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
   }, [filteredTransactions]);
 
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden">
+    <div className="min-h-screen bg-background">
       <Header
         onMenuToggle={() => setIsMenuOpen(!isMenuOpen)}
         isMenuOpen={isMenuOpen}
       />
-      <MobileNav
-        isOpen={isMenuOpen}
-        onClose={() => setIsMenuOpen(false)}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-      />
+      <MobileNav setActiveTab={setActiveTab} />
 
       <main className="pb-24 md:pb-8">
         <div className="max-w-7xl mx-auto px-4 py-4 md:px-6 md:py-6">

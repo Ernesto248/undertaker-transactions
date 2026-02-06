@@ -66,8 +66,8 @@ export function TransactionCard({ transaction }: TransactionCardProps) {
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="font-medium text-foreground truncate">{transaction.senderName}</p>
-                <p className="text-xs text-muted-foreground truncate">{transaction.accountName}</p>
+                <p className="font-medium text-foreground break-words">{transaction.senderName}</p>
+                <p className="text-xs text-muted-foreground break-words">{transaction.accountName}</p>
               </div>
               <p className={cn("text-base md:text-lg font-semibold shrink-0", typeColors[transaction.type])}>
                 {transaction.type === "withdrawal" ? "-" : "+"}{formatAmount(transaction.amount)}
@@ -80,19 +80,14 @@ export function TransactionCard({ transaction }: TransactionCardProps) {
               <button
                 type="button"
                 onClick={copyToClipboard}
-                className="flex items-center gap-1 max-w-full min-w-0 overflow-hidden text-[10px] md:text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="flex flex-wrap items-center gap-1 max-w-full min-w-0 text-[10px] md:text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 {copied ? (
                   <Check className="h-3 w-3 text-[hsl(var(--success))]" />
                 ) : (
                   <Copy className="h-3 w-3" />
                 )}
-                <span
-                  className="font-mono truncate inline-block max-w-[150px] sm:max-w-[220px] md:max-w-none"
-                  title={transaction.confirmationCode}
-                >
-                  {transaction.confirmationCode}
-                </span>
+                <span className="font-mono break-all">{transaction.confirmationCode}</span>
               </button>
             </div>
             <p className="mt-2 text-[10px] md:text-xs text-muted-foreground">
