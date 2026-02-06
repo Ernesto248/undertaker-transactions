@@ -14,8 +14,8 @@ const IngestTransactionSchema = z
       .transform((v) => (typeof v === "string" ? Number(v) : v)),
     currency: z.string().trim().min(1).default("USD"),
     confirmationCode: z.string().trim().min(1),
-    occurredAt: z.string().datetime().optional().nullable(),
-    postedAt: z.string().datetime().optional().nullable(),
+    occurredAt: z.string().datetime({ offset: true }).optional().nullable(),
+    postedAt: z.string().datetime({ offset: true }).optional().nullable(),
   })
   .superRefine((data, ctx) => {
     if (!data.accountName && !data.emailAccount) {
