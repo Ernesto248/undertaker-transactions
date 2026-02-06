@@ -30,7 +30,7 @@ export function Header({ onMenuToggle, isMenuOpen }: HeaderProps) {
               <Activity className="h-5 w-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-lg md:text-xl font-bold text-foreground">TransacTrack</h1>
+              <h1 className="text-lg md:text-xl font-bold text-foreground">TransacKiller</h1>
               <p className="text-[10px] md:text-xs text-muted-foreground hidden sm:block">
                 Panel de Transacciones
               </p>
