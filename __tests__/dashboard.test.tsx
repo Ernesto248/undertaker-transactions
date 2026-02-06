@@ -10,7 +10,7 @@ const mockTransactions: Transaction[] = [
   {
     id: "txn_001",
     bank: "Wells Fargo",
-    emailAccount: "personal@gmail.com",
+    accountName: "Personal",
     senderName: "Test Sender",
     amount: 1000.00,
     confirmationCode: "WF-123",
@@ -20,7 +20,7 @@ const mockTransactions: Transaction[] = [
   {
     id: "txn_002",
     bank: "Bank of America",
-    emailAccount: "business@gmail.com",
+    accountName: "Business",
     senderName: "Business Sender",
     amount: 2000.00,
     confirmationCode: "BOA-456",
@@ -35,7 +35,7 @@ describe('Dashboard Component', () => {
     
     // Check if stats are calculated correctly
     expect(screen.getByText('Total Recibido')).toBeDefined()
-    expect(screen.getByText('$3,000')).toBeDefined() // 1000 + 2000
+    expect(screen.getAllByText('$3,000').length).toBeGreaterThan(0) // 1000 + 2000
     
     // Check if transaction list shows up
     expect(screen.getByText('Test Sender')).toBeDefined()

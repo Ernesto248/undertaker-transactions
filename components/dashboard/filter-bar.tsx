@@ -31,8 +31,10 @@ export type DateFilter = "all" | "today" | "yesterday" | "week" | "month" | "cus
 interface FilterBarProps {
   bankFilter: string
   setBankFilter: (value: string) => void
-  emailFilter: string
-  setEmailFilter: (value: string) => void
+  bankOptions: string[]
+  accountFilter: string
+  setAccountFilter: (value: string) => void
+  accountOptions: string[]
   searchQuery: string
   setSearchQuery: (value: string) => void
   dateFilter: DateFilter
@@ -53,8 +55,10 @@ const dateFilterOptions = [
 export function FilterBar({
   bankFilter,
   setBankFilter,
-  emailFilter,
-  setEmailFilter,
+  bankOptions,
+  accountFilter,
+  setAccountFilter,
+  accountOptions,
   searchQuery,
   setSearchQuery,
   dateFilter,
@@ -66,19 +70,19 @@ export function FilterBar({
 
   const hasActiveFilters =
     bankFilter !== "all" ||
-    emailFilter !== "all" ||
+    accountFilter !== "all" ||
     dateFilter !== "all" ||
     (dateFilter === "custom" && (customDateRange.from || customDateRange.to))
 
   const activeFiltersCount = [
     bankFilter !== "all",
-    emailFilter !== "all",
+    accountFilter !== "all",
     dateFilter !== "all",
   ].filter(Boolean).length
 
   const clearAllFilters = () => {
     setBankFilter("all")
-    setEmailFilter("all")
+    setAccountFilter("all")
     setSearchQuery("")
     setDateFilter("all")
     setCustomDateRange({ from: undefined, to: undefined })
@@ -243,22 +247,27 @@ export function FilterBar({
                   </SelectTrigger>
                   <SelectContent className="bg-card border-border">
                     <SelectItem value="all">Todos los bancos</SelectItem>
-                    <SelectItem value="Wells Fargo">Wells Fargo</SelectItem>
-                    <SelectItem value="Bank of America">Bank of America</SelectItem>
+                    {bankOptions.map((bank) => (
+                      <SelectItem key={bank} value={bank}>
+                        {bank}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <span className="text-sm font-medium text-muted-foreground">Cuenta email</span>
-                <Select value={emailFilter} onValueChange={setEmailFilter}>
+                <span className="text-sm font-medium text-muted-foreground">Cuenta</span>
+                <Select value={accountFilter} onValueChange={setAccountFilter}>
                   <SelectTrigger className="w-full bg-secondary border-border text-foreground">
-                    <SelectValue placeholder="Cuenta email" />
+                    <SelectValue placeholder="Cuenta" />
                   </SelectTrigger>
                   <SelectContent className="bg-card border-border">
                     <SelectItem value="all">Todas las cuentas</SelectItem>
-                    <SelectItem value="personal@gmail.com">personal@gmail.com</SelectItem>
-                    <SelectItem value="business@gmail.com">business@gmail.com</SelectItem>
-                    <SelectItem value="work@gmail.com">work@gmail.com</SelectItem>
+                    {accountOptions.map((account) => (
+                      <SelectItem key={account} value={account}>
+                        {account}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

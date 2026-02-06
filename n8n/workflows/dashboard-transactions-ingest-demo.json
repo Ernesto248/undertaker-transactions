@@ -15,7 +15,7 @@
         "values": {
           "string": [
             { "name": "bankName", "value": "Wells Fargo" },
-            { "name": "emailAccount", "value": "personal@gmail.com" },
+            { "name": "accountName", "value": "Martinez Global Company" },
             { "name": "senderName", "value": "John Doe" },
             { "name": "currency", "value": "USD" },
             { "name": "confirmationCode", "value": "={{`WF-${Date.now()}`}}" },

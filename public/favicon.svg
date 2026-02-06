@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="TransacTrack">
+  <rect width="64" height="64" rx="14" fill="#0a0b0d" />
+  <rect x="10" y="16" width="20" height="8" fill="#f5f7ff" />
+  <rect x="16" y="16" width="8" height="34" fill="#f5f7ff" />
+  <rect x="34" y="16" width="20" height="8" fill="#f5f7ff" />
+  <rect x="40" y="16" width="8" height="34" fill="#f5f7ff" />
+  <rect x="12" y="52" width="40" height="4" rx="2" fill="#22c55e" />
+</svg>

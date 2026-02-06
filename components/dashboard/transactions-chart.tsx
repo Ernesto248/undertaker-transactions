@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import type { Transaction } from "@/lib/mock-data"
+import type { Transaction } from "@/lib/types"
 import {
   AreaChart,
   Area,
@@ -18,20 +18,46 @@ import { Building2, Mail } from "lucide-react"
 import { format, parseISO, startOfDay, eachDayOfInterval, subDays } from "date-fns"
 import { es } from "date-fns/locale"
 
-type ViewMode = "bank" | "email"
+type ViewMode = "bank" | "account"
 
 interface TransactionsChartProps {
   transactions: Transaction[]
 }
 
+const SERIES_COLORS = [
+  "hsl(38, 92%, 50%)",
+  "hsl(199, 89%, 48%)",
+  "hsl(142, 71%, 45%)",
+  "hsl(270, 70%, 60%)",
+  "hsl(340, 75%, 55%)",
+]
+
 export function TransactionsChart({ transactions }: TransactionsChartProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("bank")
 
+  const endDate = useMemo(() => new Date(), [])
+  const startDate = useMemo(() => subDays(endDate, 6), [endDate])
+  const days = useMemo(() => eachDayOfInterval({ start: startDate, end: endDate }), [startDate, endDate])
+
+  const bankSeries = useMemo(() => {
+    const totals = new Map<string, number>()
+    transactions.forEach((t) => totals.set(t.bank, (totals.get(t.bank) ?? 0) + t.amount))
+    return Array.from(totals.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([bank]) => bank)
+  }, [transactions])
+
+  const accountSeries = useMemo(() => {
+    const totals = new Map<string, number>()
+    transactions.forEach((t) => totals.set(t.accountName, (totals.get(t.accountName) ?? 0) + t.amount))
+    return Array.from(totals.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([accountName]) => accountName)
+  }, [transactions])
+
   const chartDataByBank = useMemo(() => {
-    const endDate = new Date()
-    const startDate = subDays(endDate, 6)
-    const days = eachDayOfInterval({ start: startDate, end: endDate })
-
     return days.map((day) => {
       const dayStart = startOfDay(day)
       const dayTransactions = transactions.filter((t) => {
@@ -39,27 +65,19 @@ export function TransactionsChart({ transactions }: TransactionsChartProps) {
         return txDate.getTime() === dayStart.getTime()
       })
 
-      const wellsFargo = dayTransactions
-        .filter((t) => t.bank === "Wells Fargo")
-        .reduce((sum, t) => sum + t.amount, 0)
-
-      const bankOfAmerica = dayTransactions
-        .filter((t) => t.bank === "Bank of America")
-        .reduce((sum, t) => sum + t.amount, 0)
-
-      return {
+      const base: Record<string, number | string> = {
         date: format(day, "dd MMM", { locale: es }),
-        wellsFargo,
-        bankOfAmerica,
       }
+
+      bankSeries.forEach((bank) => {
+        base[bank] = dayTransactions.filter((t) => t.bank === bank).reduce((sum, t) => sum + t.amount, 0)
+      })
+
+      return base
     })
-  }, [transactions])
+  }, [transactions, days, bankSeries])
 
-  const chartDataByEmail = useMemo(() => {
-    const endDate = new Date()
-    const startDate = subDays(endDate, 6)
-    const days = eachDayOfInterval({ start: startDate, end: endDate })
-
+  const chartDataByAccount = useMemo(() => {
     return days.map((day) => {
       const dayStart = startOfDay(day)
       const dayTransactions = transactions.filter((t) => {
@@ -67,28 +85,20 @@ export function TransactionsChart({ transactions }: TransactionsChartProps) {
         return txDate.getTime() === dayStart.getTime()
       })
 
-      const personal = dayTransactions
-        .filter((t) => t.emailAccount === "personal@gmail.com")
-        .reduce((sum, t) => sum + t.amount, 0)
-
-      const business = dayTransactions
-        .filter((t) => t.emailAccount === "business@gmail.com")
-        .reduce((sum, t) => sum + t.amount, 0)
-
-      const work = dayTransactions
-        .filter((t) => t.emailAccount === "work@gmail.com")
-        .reduce((sum, t) => sum + t.amount, 0)
-
-      return {
+      const base: Record<string, number | string> = {
         date: format(day, "dd MMM", { locale: es }),
-        personal,
-        business,
-        work,
       }
-    })
-  }, [transactions])
 
-  const chartData = viewMode === "bank" ? chartDataByBank : chartDataByEmail
+      accountSeries.forEach((account) => {
+        base[account] = dayTransactions.filter((t) => t.accountName === account).reduce((sum, t) => sum + t.amount, 0)
+      })
+
+      return base
+    })
+  }, [transactions, days, accountSeries])
+
+  const chartData = viewMode === "bank" ? chartDataByBank : chartDataByAccount
+  const series = viewMode === "bank" ? bankSeries : accountSeries
 
   return (
     <Card className="bg-card border-border">
@@ -96,7 +106,7 @@ export function TransactionsChart({ transactions }: TransactionsChartProps) {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle className="text-base md:text-lg font-medium text-foreground">
-              {viewMode === "bank" ? "Transacciones por Banco" : "Transacciones por Email"}
+              {viewMode === "bank" ? "Transacciones por Banco" : "Transacciones por Cuenta"}
             </CardTitle>
             <p className="text-xs md:text-sm text-muted-foreground">Últimos 7 días</p>
           </div>
@@ -111,13 +121,13 @@ export function TransactionsChart({ transactions }: TransactionsChartProps) {
               <span>Banco</span>
             </Button>
             <Button
-              variant={viewMode === "email" ? "default" : "ghost"}
+              variant={viewMode === "account" ? "default" : "ghost"}
               size="sm"
-              onClick={() => setViewMode("email")}
+              onClick={() => setViewMode("account")}
               className="h-7 px-2 text-xs gap-1"
             >
               <Mail className="h-3 w-3" />
-              <span>Email</span>
+              <span>Cuenta</span>
             </Button>
           </div>
         </div>
@@ -125,145 +135,53 @@ export function TransactionsChart({ transactions }: TransactionsChartProps) {
       <CardContent className="pt-0">
         <div className="h-[250px] md:h-[300px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            {viewMode === "bank" ? (
-              <AreaChart
-                data={chartData}
-                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-              >
-                <defs>
-                  <linearGradient id="wellsFargoGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(38, 92%, 50%)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(38, 92%, 50%)" stopOpacity={0} />
+            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <defs>
+                {series.map((key, index) => (
+                  <linearGradient key={key} id={`seriesGradient-${viewMode}-${index}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={SERIES_COLORS[index % SERIES_COLORS.length]} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={SERIES_COLORS[index % SERIES_COLORS.length]} stopOpacity={0} />
                   </linearGradient>
-                  <linearGradient id="boaGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(199, 89%, 48%)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(199, 89%, 48%)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 18%)" vertical={false} />
-                <XAxis
-                  dataKey="date"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: "hsl(220, 10%, 55%)", fontSize: 11 }}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: "hsl(220, 10%, 55%)", fontSize: 11 }}
-                  tickFormatter={(value) => `$${value / 1000}k`}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(220, 15%, 8%)",
-                    border: "1px solid hsl(220, 15%, 18%)",
-                    borderRadius: "8px",
-                    color: "hsl(0, 0%, 98%)",
-                  }}
-                  labelStyle={{ color: "hsl(0, 0%, 98%)" }}
-                  formatter={(value: number) => [`$${value.toLocaleString()}`, ""]}
-                />
-                <Legend
-                  wrapperStyle={{ paddingTop: "20px" }}
-                  formatter={(value) => (
-                    <span style={{ color: "hsl(220, 10%, 55%)", fontSize: "12px" }}>
-                      {value === "wellsFargo" ? "Wells Fargo" : "Bank of America"}
-                    </span>
-                  )}
-                />
+                ))}
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 18%)" vertical={false} />
+              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: "hsl(220, 10%, 55%)", fontSize: 11 }} />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "hsl(220, 10%, 55%)", fontSize: 11 }}
+                tickFormatter={(value) => `$${value / 1000}k`}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "hsl(220, 15%, 8%)",
+                  border: "1px solid hsl(220, 15%, 18%)",
+                  borderRadius: "8px",
+                  color: "hsl(0, 0%, 98%)",
+                }}
+                labelStyle={{ color: "hsl(0, 0%, 98%)" }}
+                formatter={(value: number) => [`$${value.toLocaleString()}`, ""]}
+              />
+              <Legend
+                wrapperStyle={{ paddingTop: "20px" }}
+                formatter={(value) => (
+                  <span style={{ color: "hsl(220, 10%, 55%)", fontSize: "12px" }}>
+                    {value}
+                  </span>
+                )}
+              />
+              {series.map((key, index) => (
                 <Area
+                  key={key}
                   type="monotone"
-                  dataKey="wellsFargo"
-                  stroke="hsl(38, 92%, 50%)"
+                  dataKey={key}
+                  stroke={SERIES_COLORS[index % SERIES_COLORS.length]}
                   strokeWidth={2}
-                  fill="url(#wellsFargoGradient)"
-                  name="wellsFargo"
+                  fill={`url(#seriesGradient-${viewMode}-${index})`}
+                  name={key}
                 />
-                <Area
-                  type="monotone"
-                  dataKey="bankOfAmerica"
-                  stroke="hsl(199, 89%, 48%)"
-                  strokeWidth={2}
-                  fill="url(#boaGradient)"
-                  name="bankOfAmerica"
-                />
-              </AreaChart>
-            ) : (
-              <AreaChart
-                data={chartData}
-                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-              >
-                <defs>
-                  <linearGradient id="personalGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(142, 71%, 45%)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(142, 71%, 45%)" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="businessGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(270, 70%, 60%)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(270, 70%, 60%)" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="workGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(340, 75%, 55%)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(340, 75%, 55%)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 18%)" vertical={false} />
-                <XAxis
-                  dataKey="date"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: "hsl(220, 10%, 55%)", fontSize: 11 }}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: "hsl(220, 10%, 55%)", fontSize: 11 }}
-                  tickFormatter={(value) => `$${value / 1000}k`}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(220, 15%, 8%)",
-                    border: "1px solid hsl(220, 15%, 18%)",
-                    borderRadius: "8px",
-                    color: "hsl(0, 0%, 98%)",
-                  }}
-                  labelStyle={{ color: "hsl(0, 0%, 98%)" }}
-                  formatter={(value: number) => [`$${value.toLocaleString()}`, ""]}
-                />
-                <Legend
-                  wrapperStyle={{ paddingTop: "20px" }}
-                  formatter={(value) => (
-                    <span style={{ color: "hsl(220, 10%, 55%)", fontSize: "12px" }}>
-                      {value === "personal" ? "personal@gmail.com" : value === "business" ? "business@gmail.com" : "work@gmail.com"}
-                    </span>
-                  )}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="personal"
-                  stroke="hsl(142, 71%, 45%)"
-                  strokeWidth={2}
-                  fill="url(#personalGradient)"
-                  name="personal"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="business"
-                  stroke="hsl(270, 70%, 60%)"
-                  strokeWidth={2}
-                  fill="url(#businessGradient)"
-                  name="business"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="work"
-                  stroke="hsl(340, 75%, 55%)"
-                  strokeWidth={2}
-                  fill="url(#workGradient)"
-                  name="work"
-                />
-              </AreaChart>
-            )}
+              ))}
+            </AreaChart>
           </ResponsiveContainer>
         </div>
       </CardContent>

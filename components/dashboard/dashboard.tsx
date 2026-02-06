@@ -4,14 +4,16 @@ import { useState, useMemo } from "react"
 import { Header } from "./header"
 import { MobileNav } from "./mobile-nav"
 import { BottomNav } from "./bottom-nav"
+import { DesktopNav } from "./desktop-nav"
 import { StatCard } from "./stat-card"
 import { TransactionCard } from "./transaction-card"
 import { TransactionsChart } from "./transactions-chart"
 import { EmailAccountsCard } from "./email-accounts-card"
 import { BankDistributionChart } from "./bank-distribution-chart"
+import { BankTotalsCard } from "./bank-totals-card"
 import { FilterBar, type DateFilter } from "./filter-bar"
 import { SettingsView } from "./settings-view"
-import { DollarSign, TrendingUp, CreditCard, Calendar } from "lucide-react"
+import { DollarSign, TrendingUp, Calendar } from "lucide-react"
 import { Transaction } from "@/lib/types"
 import {
   startOfDay,
@@ -30,13 +32,21 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("dashboard")
   const [bankFilter, setBankFilter] = useState("all")
-  const [emailFilter, setEmailFilter] = useState("all")
+  const [accountFilter, setAccountFilter] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [dateFilter, setDateFilter] = useState<DateFilter>("all")
   const [customDateRange, setCustomDateRange] = useState<{
     from: Date | undefined
     to: Date | undefined
   }>({ from: undefined, to: undefined })
+
+  const bankOptions = useMemo(() => {
+    return Array.from(new Set(initialTransactions.map((t) => t.bank))).sort((a, b) => a.localeCompare(b))
+  }, [initialTransactions])
+
+  const accountOptions = useMemo(() => {
+    return Array.from(new Set(initialTransactions.map((t) => t.accountName))).sort((a, b) => a.localeCompare(b))
+  }, [initialTransactions])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -53,7 +63,7 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
 
     return initialTransactions.filter((transaction) => {
       const matchesBank = bankFilter === "all" || transaction.bank === bankFilter
-      const matchesEmail = emailFilter === "all" || transaction.emailAccount === emailFilter
+      const matchesAccount = accountFilter === "all" || transaction.accountName === accountFilter
       const matchesSearch =
         searchQuery === "" ||
         transaction.senderName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -90,49 +100,89 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
         matchesDate = isWithinInterval(transactionDate, { start, end })
       }
 
-      return matchesBank && matchesEmail && matchesSearch && matchesDate
+      return matchesBank && matchesAccount && matchesSearch && matchesDate
     })
-  }, [bankFilter, emailFilter, searchQuery, dateFilter, customDateRange, initialTransactions])
+  }, [bankFilter, accountFilter, searchQuery, dateFilter, customDateRange, initialTransactions])
+
+  const baseFilteredTransactions = useMemo(() => {
+    return initialTransactions.filter((transaction) => {
+      const matchesBank = bankFilter === "all" || transaction.bank === bankFilter
+      const matchesAccount = accountFilter === "all" || transaction.accountName === accountFilter
+      const matchesSearch =
+        searchQuery === "" ||
+        transaction.senderName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        transaction.confirmationCode.toLowerCase().includes(searchQuery.toLowerCase())
+
+      return matchesBank && matchesAccount && matchesSearch
+    })
+  }, [bankFilter, accountFilter, searchQuery, initialTransactions])
+
+  const toTrend = (current: number, previous: number) => {
+    if (!Number.isFinite(current) || !Number.isFinite(previous)) return undefined
+    if (previous === 0) return undefined
+    const change = ((current - previous) / previous) * 100
+    const rounded = Math.round(change * 10) / 10
+    const value = Object.is(rounded, -0) ? 0 : rounded
+    return { value, isPositive: value >= 0 }
+  }
 
   // Calculate dynamic stats based on filtered transactions
   const stats = useMemo(() => {
     const totalAmount = filteredTransactions.reduce((acc, t) => acc + t.amount, 0)
-    const wellsFargoTotal = filteredTransactions
-      .filter((t) => t.bank === "Wells Fargo")
-      .reduce((acc, t) => acc + t.amount, 0)
-    const todayTransactions = filteredTransactions.filter((t) =>
-      t.createdAt.startsWith("2026-02-05") // Ideally should use dynamic date check, but matches existing logic for now
-    ).length
+    const avgTransaction = filteredTransactions.length > 0 ? totalAmount / filteredTransactions.length : 0
+
+    const now = new Date()
+    const todayStart = startOfDay(now)
+    const todayEnd = endOfDay(now)
+    const yesterdayStart = subDays(todayStart, 1)
+    const yesterdayEnd = endOfDay(yesterdayStart)
+
+    const todayTx = baseFilteredTransactions.filter((t) =>
+      isWithinInterval(new Date(t.createdAt), { start: todayStart, end: todayEnd })
+    )
+    const yesterdayTx = baseFilteredTransactions.filter((t) =>
+      isWithinInterval(new Date(t.createdAt), { start: yesterdayStart, end: yesterdayEnd })
+    )
+
+    const todayAmount = todayTx.reduce((acc, t) => acc + t.amount, 0)
+    const yesterdayAmount = yesterdayTx.reduce((acc, t) => acc + t.amount, 0)
 
     return {
       totalTransactions: filteredTransactions.length,
       totalAmount,
-      wellsFargoTotal,
-      avgTransaction: filteredTransactions.length > 0 ? totalAmount / filteredTransactions.length : 0,
-      todayTransactions,
+      avgTransaction,
+      totalAmountTrend: toTrend(todayAmount, yesterdayAmount),
+      todayTransactions: todayTx.length,
+      todayTransactionsTrend: toTrend(todayTx.length, yesterdayTx.length),
     }
+  }, [filteredTransactions, baseFilteredTransactions])
+
+  const bankTotals = useMemo(() => {
+    const totals = new Map<string, number>()
+    filteredTransactions.forEach((t) => totals.set(t.bank, (totals.get(t.bank) ?? 0) + t.amount))
+    return Array.from(totals.entries())
+      .map(([bank, totalAmount]) => ({ bank, totalAmount }))
+      .sort((a, b) => b.totalAmount - a.totalAmount)
   }, [filteredTransactions])
 
-  // Calculate email stats for the card
-  const emailStats = useMemo(() => {
-    const accountMap = new Map<string, { transactionCount: number; totalAmount: number }>();
-    
-    // Use initialTransactions (or filteredTransactions if we want the card to update with filters)
-    // Typically "Email Accounts" card might show global stats or filtered stats.
-    // Let's use filteredTransactions to be consistent with other charts
-    filteredTransactions.forEach(t => {
-      const current = accountMap.get(t.emailAccount) || { transactionCount: 0, totalAmount: 0 };
-      accountMap.set(t.emailAccount, {
-        transactionCount: current.transactionCount + 1,
-        totalAmount: current.totalAmount + t.amount
-      });
-    });
+  const accountStats = useMemo(() => {
+    const accountMap = new Map<string, { transactionCount: number; totalAmount: number }>()
 
-    return Array.from(accountMap.entries()).map(([email, data]) => ({
-      email,
-      ...data
-    })).sort((a, b) => b.totalAmount - a.totalAmount);
-  }, [filteredTransactions]);
+    filteredTransactions.forEach((t) => {
+      const current = accountMap.get(t.accountName) || { transactionCount: 0, totalAmount: 0 }
+      accountMap.set(t.accountName, {
+        transactionCount: current.transactionCount + 1,
+        totalAmount: current.totalAmount + t.amount,
+      })
+    })
+
+    return Array.from(accountMap.entries())
+      .map(([accountName, data]) => ({
+        accountName,
+        ...data,
+      }))
+      .sort((a, b) => b.totalAmount - a.totalAmount)
+  }, [filteredTransactions])
 
   return (
     <div className="min-h-screen bg-background">
@@ -146,66 +196,101 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
 
       <main className="pb-24 md:pb-8">
         <div className="max-w-7xl mx-auto px-4 py-4 md:px-6 md:py-6">
-          {activeTab === "dashboard" && (
-            <div className="space-y-4 md:space-y-6">
-              {/* Filters for Dashboard */}
-              <FilterBar
-                bankFilter={bankFilter}
-                setBankFilter={setBankFilter}
-                emailFilter={emailFilter}
-                setEmailFilter={setEmailFilter}
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                dateFilter={dateFilter}
-                setDateFilter={setDateFilter}
-                customDateRange={customDateRange}
-                setCustomDateRange={setCustomDateRange}
-              />
+          <DesktopNav activeTab={activeTab} setActiveTab={setActiveTab} />
 
-              {/* Stats Grid */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-                <StatCard
-                  title="Total Recibido"
-                  value={formatCurrency(stats.totalAmount)}
-                  subtitle={`${stats.totalTransactions} transacciones`}
-                  icon={DollarSign}
-                  trend={{ value: 12.5, isPositive: true }}
+          <div className="mt-4 md:mt-6">
+            {activeTab === "dashboard" && (
+              <div className="space-y-4 md:space-y-6">
+                <FilterBar
+                  bankFilter={bankFilter}
+                  setBankFilter={setBankFilter}
+                  bankOptions={bankOptions}
+                  accountFilter={accountFilter}
+                  setAccountFilter={setAccountFilter}
+                  accountOptions={accountOptions}
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
+                  dateFilter={dateFilter}
+                  setDateFilter={setDateFilter}
+                  customDateRange={customDateRange}
+                  setCustomDateRange={setCustomDateRange}
                 />
-                <StatCard
-                  title="Promedio"
-                  value={formatCurrency(stats.avgTransaction)}
-                  subtitle="por transacción"
-                  icon={TrendingUp}
-                />
-                <StatCard
-                  title="Wells Fargo"
-                  value={formatCurrency(stats.wellsFargoTotal)}
-                  icon={CreditCard}
-                />
-                <StatCard
-                  title="Hoy"
-                  value={stats.todayTransactions.toString()}
-                  subtitle="transacciones"
-                  icon={Calendar}
-                  trend={{ value: 33, isPositive: true }}
-                />
-              </div>
 
-              {/* Charts */}
-              <div className="grid lg:grid-cols-3 gap-4 md:gap-6">
-                <div className="lg:col-span-2">
-                  <TransactionsChart transactions={filteredTransactions} />
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                  <StatCard
+                    title="Total Recibido"
+                    value={formatCurrency(stats.totalAmount)}
+                    subtitle={`${stats.totalTransactions} transacciones`}
+                    icon={DollarSign}
+                    trend={stats.totalAmountTrend}
+                  />
+                  <StatCard
+                    title="Promedio"
+                    value={formatCurrency(stats.avgTransaction)}
+                    subtitle="por transacción"
+                    icon={TrendingUp}
+                  />
+                <BankTotalsCard totals={bankTotals} formatCurrency={formatCurrency} />
+                  <StatCard
+                    title="Hoy"
+                    value={stats.todayTransactions.toString()}
+                    subtitle="transacciones"
+                    icon={Calendar}
+                    trend={stats.todayTransactionsTrend}
+                  />
                 </div>
-                <BankDistributionChart transactions={filteredTransactions} />
-              </div>
 
-              {/* Recent Transactions */}
-              <div>
-                <h2 className="text-lg md:text-xl font-semibold text-foreground mb-3">
-                  Transacciones Recientes
-                </h2>
+                <div className="grid lg:grid-cols-3 gap-4 md:gap-6">
+                  <div className="lg:col-span-2">
+                    <TransactionsChart transactions={filteredTransactions} />
+                  </div>
+                  <BankDistributionChart transactions={filteredTransactions} />
+                </div>
+
+                <div>
+                  <h2 className="text-lg md:text-xl font-semibold text-foreground mb-3">
+                    Transacciones Recientes
+                  </h2>
+                  <div className="grid gap-3">
+                    {filteredTransactions.slice(0, 5).map((transaction) => (
+                      <TransactionCard key={transaction.id} transaction={transaction} />
+                    ))}
+                    {filteredTransactions.length === 0 && (
+                      <div className="text-center py-12">
+                        <p className="text-muted-foreground">No se encontraron transacciones</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "transactions" && (
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-xl md:text-2xl font-bold text-foreground">Transacciones</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {filteredTransactions.length} de {initialTransactions.length} transacciones
+                  </p>
+                </div>
+
+                <FilterBar
+                  bankFilter={bankFilter}
+                  setBankFilter={setBankFilter}
+                  bankOptions={bankOptions}
+                  accountFilter={accountFilter}
+                  setAccountFilter={setAccountFilter}
+                  accountOptions={accountOptions}
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
+                  dateFilter={dateFilter}
+                  setDateFilter={setDateFilter}
+                  customDateRange={customDateRange}
+                  setCustomDateRange={setCustomDateRange}
+                />
+
                 <div className="grid gap-3">
-                  {filteredTransactions.slice(0, 5).map((transaction) => (
+                  {filteredTransactions.map((transaction) => (
                     <TransactionCard key={transaction.id} transaction={transaction} />
                   ))}
                   {filteredTransactions.length === 0 && (
@@ -215,75 +300,42 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
                   )}
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {activeTab === "transactions" && (
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-xl md:text-2xl font-bold text-foreground">Transacciones</h2>
-                <p className="text-sm text-muted-foreground">
-                  {filteredTransactions.length} de {initialTransactions.length} transacciones
-                </p>
-              </div>
+            {activeTab === "analytics" && (
+              <div className="space-y-4 md:space-y-6">
+                <div>
+                  <h2 className="text-xl md:text-2xl font-bold text-foreground">Análisis</h2>
+                  <p className="text-sm text-muted-foreground">Estadísticas detalladas</p>
+                </div>
 
-              <FilterBar
-                bankFilter={bankFilter}
-                setBankFilter={setBankFilter}
-                emailFilter={emailFilter}
-                setEmailFilter={setEmailFilter}
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                dateFilter={dateFilter}
-                setDateFilter={setDateFilter}
-                customDateRange={customDateRange}
-                setCustomDateRange={setCustomDateRange}
-              />
+                <FilterBar
+                  bankFilter={bankFilter}
+                  setBankFilter={setBankFilter}
+                  bankOptions={bankOptions}
+                  accountFilter={accountFilter}
+                  setAccountFilter={setAccountFilter}
+                  accountOptions={accountOptions}
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
+                  dateFilter={dateFilter}
+                  setDateFilter={setDateFilter}
+                  customDateRange={customDateRange}
+                  setCustomDateRange={setCustomDateRange}
+                />
 
-              <div className="grid gap-3">
-                {filteredTransactions.map((transaction) => (
-                  <TransactionCard key={transaction.id} transaction={transaction} />
-                ))}
-                {filteredTransactions.length === 0 && (
-                  <div className="text-center py-12">
-                    <p className="text-muted-foreground">No se encontraron transacciones</p>
+                <div className="grid gap-4 md:gap-6">
+                  <TransactionsChart transactions={filteredTransactions} />
+                  <div className="grid md:grid-cols-2 gap-4 md:gap-6">
+                    <BankDistributionChart transactions={filteredTransactions} />
+                    <EmailAccountsCard stats={accountStats} />
                   </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === "analytics" && (
-            <div className="space-y-4 md:space-y-6">
-              <div>
-                <h2 className="text-xl md:text-2xl font-bold text-foreground">Análisis</h2>
-                <p className="text-sm text-muted-foreground">Estadísticas detalladas</p>
-              </div>
-
-              <FilterBar
-                bankFilter={bankFilter}
-                setBankFilter={setBankFilter}
-                emailFilter={emailFilter}
-                setEmailFilter={setEmailFilter}
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                dateFilter={dateFilter}
-                setDateFilter={setDateFilter}
-                customDateRange={customDateRange}
-                setCustomDateRange={setCustomDateRange}
-              />
-
-              <div className="grid gap-4 md:gap-6">
-                <TransactionsChart transactions={filteredTransactions} />
-                <div className="grid md:grid-cols-2 gap-4 md:gap-6">
-                  <BankDistributionChart transactions={filteredTransactions} />
-                  <EmailAccountsCard stats={emailStats} />
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {activeTab === "settings" && <SettingsView />}
+            {activeTab === "settings" && <SettingsView accountOptions={accountOptions} />}
+          </div>
         </div>
       </main>
 

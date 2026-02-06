@@ -15,7 +15,7 @@ Para guardar las transacciones desde n8n en tu base de datos Neon, lo recomendad
 Campos requeridos:
 
 - `bankName`
-- `emailAccount`
+- `accountName`
 - `amount`
 - `confirmationCode`
 
@@ -31,7 +31,7 @@ Ejemplo:
 ```json
 {
   "bankName": "Wells Fargo",
-  "emailAccount": "personal@gmail.com",
+  "accountName": "Martinez Global Company",
   "senderName": "John Doe",
   "amount": 150,
   "currency": "USD",
@@ -77,7 +77,7 @@ Si prefieres que n8n escriba directamente en Postgres, usa el nodo de **Postgres
 Esta query asume que recibes los siguientes campos del email:
 
 - `$json.bankName` (ej: "Wells Fargo")
-- `$json.emailAccount` (ej: "personal@gmail.com")
+- `$json.accountName` (ej: "Martinez Global Company")
 - `$json.senderName` (ej: "John Doe")
 - `$json.amount` (ej: 150.00)
 - `$json.confirmationCode` (ej: "WF-123456")
@@ -91,7 +91,7 @@ WITH
   ),
   -- 2. Buscar ID de la Cuenta Gmail
   email_lookup AS (
-    SELECT id FROM gmail_accounts WHERE email_address = $2 -- $json.emailAccount
+    SELECT id FROM gmail_accounts WHERE account_name = $2 -- $json.accountName
   )
 INSERT INTO transactions (
   bank_id,

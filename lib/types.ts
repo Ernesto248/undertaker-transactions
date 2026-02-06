@@ -1,10 +1,12 @@
+export type TransactionType = "deposit" | "withdrawal" | "transfer"
+
 export type Transaction = {
-  id: string;
-  bank: string;
-  emailAccount: string;
-  senderName: string;
-  amount: number;
-  confirmationCode: string;
-  createdAt: string;
-  type: string;
-};
+  id: string
+  bank: string
+  accountName: string
+  senderName: string
+  amount: number
+  confirmationCode: string
+  createdAt: string
+  type: TransactionType
+}

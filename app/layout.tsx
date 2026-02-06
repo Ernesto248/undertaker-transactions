@@ -9,6 +9,10 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 export const metadata: Metadata = {
   title: 'TransacTrack - Panel de Transacciones',
   description: 'Dashboard para monitorear transacciones bancarias en tiempo real',
+  icons: {
+    icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
+    shortcut: '/favicon.svg',
+  },
 }
 
 export const viewport: Viewport = {

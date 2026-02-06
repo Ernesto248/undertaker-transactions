@@ -6,7 +6,11 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { CheckCircle, Database, Mail, RefreshCw, Zap } from "lucide-react"
 
-export function SettingsView() {
+interface SettingsViewProps {
+  accountOptions: string[]
+}
+
+export function SettingsView({ accountOptions }: SettingsViewProps) {
   return (
     <div className="space-y-4">
       <div>
@@ -79,13 +83,13 @@ export function SettingsView() {
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-medium text-foreground flex items-center gap-2">
               <Mail className="h-5 w-5 text-destructive" />
-              Cuentas de Email Monitoreadas
+              Cuentas Monitoreadas
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {["personal@gmail.com", "business@gmail.com", "work@gmail.com"].map((email) => (
-              <div key={email} className="flex items-center justify-between p-2 rounded-lg bg-secondary/50">
-                <span className="text-sm text-foreground">{email}</span>
+            {accountOptions.map((accountName) => (
+              <div key={accountName} className="flex items-center justify-between p-2 rounded-lg bg-secondary/50">
+                <span className="text-sm text-foreground">{accountName}</span>
                 <CheckCircle className="h-4 w-4 text-[hsl(var(--success))]" />
               </div>
             ))}
