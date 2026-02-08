@@ -39,7 +39,7 @@ export function TransactionCard({ transaction }: TransactionCardProps) {
       month: "short",
       hour: "2-digit",
       minute: "2-digit",
-      timeZone: "America/Toronto",
+      timeZone: "Etc/GMT+5",
     }).format(date)
   }
 
