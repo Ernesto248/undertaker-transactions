@@ -4,16 +4,16 @@ import type { Transaction } from "@/lib/types";
 
 export const runtime = "nodejs";
 
-const OptionalUuidSchema = z.preprocess((value) => {
+const OptionalStringSchema = z.preprocess((value) => {
   if (value === null || value === undefined) return undefined;
   if (typeof value === "string" && value.trim() === "") return undefined;
   return value;
-}, z.string().trim().uuid().optional());
+}, z.string().trim().optional());
 
 const IngestTransactionSchema = z
   .object({
-    emailId: OptionalUuidSchema,
-    email_id: OptionalUuidSchema,
+    emailId: OptionalStringSchema,
+    email_id: OptionalStringSchema,
     bankName: z.string().trim().min(1),
     accountName: z.string().trim().min(1).optional(),
     emailAccount: z.string().trim().email().optional(),
@@ -40,6 +40,46 @@ const IngestTransactionSchema = z
     emailId: data.emailId ?? data.email_id ?? null,
     accountName: data.accountName ?? data.emailAccount!,
   }));
+
+function isUuid(value: string) {
+  return z.string().uuid().safeParse(value).success;
+}
+
+async function resolveEmailUuid(
+  client: {
+    query: (text: string, values?: unknown[]) => Promise<{ rows: any[] }>;
+  },
+  rawEmailId: string | null,
+  gmailAccountId: string,
+) {
+  if (!rawEmailId) {
+    return { ok: true as const, emailUuid: null as string | null };
+  }
+
+  if (isUuid(rawEmailId)) {
+    return { ok: true as const, emailUuid: rawEmailId };
+  }
+
+  const emailByMessageId = await client.query(
+    `
+    SELECT id
+    FROM emails
+    WHERE gmail_account_id = $1 AND message_id = $2
+    ORDER BY created_at DESC
+    LIMIT 1
+    `,
+    [gmailAccountId, rawEmailId],
+  );
+
+  if (!emailByMessageId.rows[0]?.id) {
+    return { ok: false as const, error: "email_not_found_for_message_id" };
+  }
+
+  return {
+    ok: true as const,
+    emailUuid: String(emailByMessageId.rows[0].id),
+  };
+}
 
 function isAuthorized(request: Request) {
   const expected = process.env.N8N_INGEST_API_KEY;
@@ -217,6 +257,20 @@ export async function POST(request: Request) {
       ? new Date(parsed.data.postedAt)
       : null;
 
+    const resolvedEmail = await resolveEmailUuid(
+      client,
+      parsed.data.emailId,
+      gmailAccountId,
+    );
+
+    if (!resolvedEmail.ok) {
+      await client.query("ROLLBACK");
+      return Response.json(
+        { ok: false, error: resolvedEmail.error },
+        { status: 400 },
+      );
+    }
+
     const insert = await client.query(
       `INSERT INTO transactions
         (email_id, bank_id, gmail_account_id, actor_name, amount, currency, confirmation_code, occurred_at, posted_at)
@@ -224,7 +278,7 @@ export async function POST(request: Request) {
         ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING id`,
       [
-        parsed.data.emailId,
+        resolvedEmail.emailUuid,
         bankId,
         gmailAccountId,
         parsed.data.senderName ?? null,
@@ -258,6 +312,13 @@ export async function POST(request: Request) {
       return Response.json(
         { ok: false, error: "duplicate_transaction" },
         { status: 409 },
+      );
+    }
+
+    if (err?.code === "23503") {
+      return Response.json(
+        { ok: false, error: "invalid_email_reference" },
+        { status: 400 },
       );
     }
 
