@@ -14,10 +14,14 @@ export async function getTransactions(): Promise<Transaction[]> {
         t.actor_name as "senderName",
         t.amount,
         t.confirmation_code as "confirmationCode",
-        t.occurred_at as "createdAt"
+        t.occurred_at as "createdAt",
+        rta.remesero_id as "assignedRemeseroId",
+        r.nombre as "assignedRemeseroNombre"
       FROM transactions t
       LEFT JOIN banks b ON t.bank_id = b.id
       LEFT JOIN gmail_accounts g ON t.gmail_account_id = g.id
+      LEFT JOIN remesero_transaction_assignments rta ON rta.transaction_id = t.id AND rta.unassigned_at IS NULL
+      LEFT JOIN remeseros r ON r.id = rta.remesero_id
       ORDER BY t.occurred_at DESC
     `;
 

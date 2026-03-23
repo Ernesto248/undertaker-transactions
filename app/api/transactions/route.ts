@@ -4,8 +4,16 @@ import type { Transaction } from "@/lib/types";
 
 export const runtime = "nodejs";
 
+const OptionalUuidSchema = z.preprocess((value) => {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === "string" && value.trim() === "") return undefined;
+  return value;
+}, z.string().trim().uuid().optional());
+
 const IngestTransactionSchema = z
   .object({
+    emailId: OptionalUuidSchema,
+    email_id: OptionalUuidSchema,
     bankName: z.string().trim().min(1),
     accountName: z.string().trim().min(1).optional(),
     emailAccount: z.string().trim().email().optional(),
@@ -29,6 +37,7 @@ const IngestTransactionSchema = z
   })
   .transform((data) => ({
     ...data,
+    emailId: data.emailId ?? data.email_id ?? null,
     accountName: data.accountName ?? data.emailAccount!,
   }));
 
@@ -113,10 +122,14 @@ export async function GET() {
         t.actor_name as "senderName",
         t.amount,
         t.confirmation_code as "confirmationCode",
-        t.occurred_at as "createdAt"
+        t.occurred_at as "createdAt",
+        rta.remesero_id as "assignedRemeseroId",
+        r.nombre as "assignedRemeseroNombre"
       FROM transactions t
       LEFT JOIN banks b ON t.bank_id = b.id
       LEFT JOIN gmail_accounts g ON t.gmail_account_id = g.id
+      LEFT JOIN remesero_transaction_assignments rta ON rta.transaction_id = t.id AND rta.unassigned_at IS NULL
+      LEFT JOIN remeseros r ON r.id = rta.remesero_id
       ORDER BY t.occurred_at DESC
     `;
 
@@ -206,11 +219,12 @@ export async function POST(request: Request) {
 
     const insert = await client.query(
       `INSERT INTO transactions
-        (bank_id, gmail_account_id, actor_name, amount, currency, confirmation_code, occurred_at, posted_at)
+        (email_id, bank_id, gmail_account_id, actor_name, amount, currency, confirmation_code, occurred_at, posted_at)
       VALUES
-        ($1, $2, $3, $4, $5, $6, $7, $8)
+        ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING id`,
       [
+        parsed.data.emailId,
         bankId,
         gmailAccountId,
         parsed.data.senderName ?? null,

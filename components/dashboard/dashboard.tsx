@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Header } from "./header";
 import { MobileNav } from "./mobile-nav";
 import { BottomNav } from "./bottom-nav";
@@ -13,8 +13,9 @@ import { BankDistributionChart } from "./bank-distribution-chart";
 import { BankTotalsCard } from "./bank-totals-card";
 import { FilterBar, type DateFilter } from "./filter-bar";
 import { SettingsView } from "./settings-view";
+import { RemeserosView } from "./remeseros-view";
 import { DollarSign, TrendingUp, Calendar } from "lucide-react";
-import { Transaction } from "@/lib/types";
+import { Remesero, RemeseroPayment, Transaction } from "@/lib/types";
 import {
   startOfDay,
   endOfDay,
@@ -33,7 +34,18 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [transactions, setTransactions] =
     useState<Transaction[]>(initialTransactions);
+  const [remeseros, setRemeseros] = useState<Remesero[]>([]);
+  const [paymentsByRemesero, setPaymentsByRemesero] = useState<
+    Record<string, RemeseroPayment[]>
+  >({});
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoadingRemeseros, setIsLoadingRemeseros] = useState(false);
+  const [loadingPaymentsByRemesero, setLoadingPaymentsByRemesero] = useState<
+    Record<string, boolean>
+  >({});
+  const [assigningByTransaction, setAssigningByTransaction] = useState<
+    Record<string, boolean>
+  >({});
   const [bankFilter, setBankFilter] = useState("all");
   const [accountFilter, setAccountFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -42,6 +54,11 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
     from: Date | undefined;
     to: Date | undefined;
   }>({ from: undefined, to: undefined });
+
+  const apiUrl = (path: string) => {
+    if (typeof window === "undefined") return path;
+    return new URL(path, window.location.origin).toString();
+  };
 
   const bankOptions = useMemo(() => {
     return Array.from(new Set(transactions.map((t) => t.bank))).sort((a, b) =>
@@ -55,21 +72,184 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
     );
   }, [transactions]);
 
-  const refreshData = async () => {
-    setIsRefreshing(true);
+  const refreshTransactions = async () => {
     try {
-      const res = await fetch("/api/transactions", { cache: "no-store" });
+      const res = await fetch(apiUrl("/api/transactions"), {
+        cache: "no-store",
+      });
       if (!res.ok) return;
+
       const data = (await res.json()) as {
         ok?: boolean;
         transactions?: Transaction[];
       };
+
       if (!data?.ok || !Array.isArray(data.transactions)) return;
       setTransactions(data.transactions);
+    } catch {}
+  };
+
+  const refreshRemeseros = async () => {
+    setIsLoadingRemeseros(true);
+    try {
+      const res = await fetch(apiUrl("/api/remeseros"), { cache: "no-store" });
+      if (!res.ok) return;
+
+      const data = (await res.json()) as {
+        ok?: boolean;
+        remeseros?: Remesero[];
+      };
+
+      if (!data?.ok || !Array.isArray(data.remeseros)) return;
+      setRemeseros(data.remeseros);
+    } catch {
+      return;
+    } finally {
+      setIsLoadingRemeseros(false);
+    }
+  };
+
+  const refreshData = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([refreshTransactions(), refreshRemeseros()]);
     } finally {
       setIsRefreshing(false);
     }
   };
+
+  const createRemesero = async (input: {
+    nombre: string;
+    precioActual: number;
+  }) => {
+    const res = await fetch(apiUrl("/api/remeseros"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+
+    if (!res.ok) return;
+    await refreshRemeseros();
+  };
+
+  const updateRemesero = async (
+    id: string,
+    input: { nombre?: string; precioActual?: number },
+  ) => {
+    const res = await fetch(apiUrl(`/api/remeseros/${id}`), {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+
+    if (!res.ok) return;
+    await refreshRemeseros();
+  };
+
+  const deleteRemesero = async (id: string) => {
+    const res = await fetch(apiUrl(`/api/remeseros/${id}`), {
+      method: "DELETE",
+    });
+
+    if (!res.ok) return;
+    await refreshRemeseros();
+  };
+
+  const loadRemeseroPayments = async (id: string) => {
+    setLoadingPaymentsByRemesero((prev) => ({ ...prev, [id]: true }));
+    try {
+      const res = await fetch(apiUrl(`/api/remeseros/${id}/payments`), {
+        cache: "no-store",
+      });
+
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        ok?: boolean;
+        payments?: RemeseroPayment[];
+      };
+
+      if (!data?.ok || !Array.isArray(data.payments)) return;
+      setPaymentsByRemesero((prev) => ({ ...prev, [id]: data.payments }));
+    } finally {
+      setLoadingPaymentsByRemesero((prev) => ({ ...prev, [id]: false }));
+    }
+  };
+
+  const createRemeseroPayment = async (
+    id: string,
+    input: { amountPaid: number; note?: string },
+  ) => {
+    const res = await fetch(apiUrl(`/api/remeseros/${id}/payments`), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+
+    if (!res.ok) return;
+
+    await Promise.all([refreshRemeseros(), loadRemeseroPayments(id)]);
+  };
+
+  const revertRemeseroPayment = async (
+    remeseroId: string,
+    paymentId: string,
+    reason?: string,
+  ) => {
+    const res = await fetch(apiUrl(`/api/remeseros/${remeseroId}/payments`), {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ paymentId, reason }),
+    });
+
+    if (!res.ok) return;
+
+    await Promise.all([refreshRemeseros(), loadRemeseroPayments(remeseroId)]);
+  };
+
+  const assignTransactionToRemesero = async (
+    transactionId: string,
+    remeseroId: string,
+  ) => {
+    setAssigningByTransaction((prev) => ({ ...prev, [transactionId]: true }));
+    try {
+      const res = await fetch(apiUrl("/api/remeseros/assignments"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ transactionId, remeseroId }),
+      });
+
+      if (!res.ok) return;
+      await Promise.all([refreshTransactions(), refreshRemeseros()]);
+    } finally {
+      setAssigningByTransaction((prev) => ({
+        ...prev,
+        [transactionId]: false,
+      }));
+    }
+  };
+
+  const unassignTransactionFromRemesero = async (transactionId: string) => {
+    setAssigningByTransaction((prev) => ({ ...prev, [transactionId]: true }));
+    try {
+      const res = await fetch(apiUrl("/api/remeseros/assignments"), {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ transactionId }),
+      });
+
+      if (!res.ok) return;
+      await Promise.all([refreshTransactions(), refreshRemeseros()]);
+    } finally {
+      setAssigningByTransaction((prev) => ({
+        ...prev,
+        [transactionId]: false,
+      }));
+    }
+  };
+
+  useEffect(() => {
+    void refreshRemeseros();
+  }, []);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -257,7 +437,12 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
         onRefresh={refreshData}
         isRefreshing={isRefreshing}
       />
-      <MobileNav setActiveTab={setActiveTab} />
+      <MobileNav
+        isOpen={isMenuOpen}
+        onClose={() => setIsMenuOpen(false)}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+      />
 
       <main className="pb-24 md:pb-8">
         <div className="max-w-7xl mx-auto px-4 py-4 md:px-6 md:py-6">
@@ -324,6 +509,12 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
                       <TransactionCard
                         key={transaction.id}
                         transaction={transaction}
+                        remeseros={remeseros}
+                        onAssign={assignTransactionToRemesero}
+                        onUnassign={unassignTransactionFromRemesero}
+                        isAssigning={
+                          assigningByTransaction[transaction.id] === true
+                        }
                       />
                     ))}
                     {filteredTransactions.length === 0 && (
@@ -370,6 +561,12 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
                     <TransactionCard
                       key={transaction.id}
                       transaction={transaction}
+                      remeseros={remeseros}
+                      onAssign={assignTransactionToRemesero}
+                      onUnassign={unassignTransactionFromRemesero}
+                      isAssigning={
+                        assigningByTransaction[transaction.id] === true
+                      }
                     />
                   ))}
                   {filteredTransactions.length === 0 && (
@@ -419,6 +616,22 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
                   </div>
                 </div>
               </div>
+            )}
+
+            {activeTab === "remeseros" && (
+              <RemeserosView
+                remeseros={remeseros}
+                paymentsByRemesero={paymentsByRemesero}
+                loadingRemeseros={isLoadingRemeseros}
+                loadingPaymentsByRemesero={loadingPaymentsByRemesero}
+                onRefreshRemeseros={refreshRemeseros}
+                onCreateRemesero={createRemesero}
+                onUpdateRemesero={updateRemesero}
+                onDeleteRemesero={deleteRemesero}
+                onLoadPayments={loadRemeseroPayments}
+                onCreatePayment={createRemeseroPayment}
+                onRevertPayment={revertRemeseroPayment}
+              />
             )}
 
             {activeTab === "settings" && (

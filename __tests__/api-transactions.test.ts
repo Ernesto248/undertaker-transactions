@@ -94,6 +94,55 @@ describe("POST /api/transactions", () => {
     expect(json.id).toBe("txn-1");
   });
 
+  it("persists email_id when provided in payload", async () => {
+    const POST = await loadHandler();
+
+    const client: MockClient = {
+      query: vi.fn(),
+      release: vi.fn(),
+    };
+
+    client.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: "bank-1" }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: "gmail-1" }] })
+      .mockResolvedValueOnce({ rows: [{ id: "txn-2" }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    connectMock.mockResolvedValue(client);
+
+    const emailId = "11111111-1111-1111-1111-111111111111";
+
+    const req = new Request("http://localhost/api/transactions", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer test-token",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        email_id: emailId,
+        bankName: "Wells Fargo",
+        accountName: "Personal",
+        senderName: "John Doe",
+        amount: 150,
+        currency: "USD",
+        confirmationCode: "WF-456",
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+
+    const insertCall = client.query.mock.calls.find((call) =>
+      String(call[0]).includes("INSERT INTO transactions"),
+    );
+
+    expect(insertCall).toBeDefined();
+    expect(insertCall?.[1]?.[0]).toBe(emailId);
+  });
+
   it("returns 409 when inserting a duplicate transaction", async () => {
     const POST = await loadHandler();
 
