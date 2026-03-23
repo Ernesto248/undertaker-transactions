@@ -143,7 +143,7 @@ describe("POST /api/transactions", () => {
     expect(insertCall?.[1]?.[0]).toBe(emailId);
   });
 
-  it("resolves non-uuid emailId using emails.message_id", async () => {
+  it("stores non-uuid emailId directly", async () => {
     const POST = await loadHandler();
 
     const client: MockClient = {
@@ -157,9 +157,6 @@ describe("POST /api/transactions", () => {
       .mockResolvedValueOnce({ rows: [{ id: "bank-1" }] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ id: "gmail-1" }] })
-      .mockResolvedValueOnce({
-        rows: [{ id: "550e8400-e29b-41d4-a716-446655440111" }],
-      })
       .mockResolvedValueOnce({ rows: [{ id: "txn-3" }] })
       .mockResolvedValueOnce({ rows: [] });
 
@@ -190,7 +187,7 @@ describe("POST /api/transactions", () => {
     );
 
     expect(insertCall).toBeDefined();
-    expect(insertCall?.[1]?.[0]).toBe("550e8400-e29b-41d4-a716-446655440111");
+    expect(insertCall?.[1]?.[0]).toBe("19d1be88ceba10ca");
   });
 
   it("returns 409 when inserting a duplicate transaction", async () => {
