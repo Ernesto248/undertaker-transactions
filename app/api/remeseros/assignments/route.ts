@@ -12,6 +12,33 @@ const UnassignSchema = z.object({
   transactionId: z.string().trim().uuid(),
 });
 
+type AssignmentWebhookEvent = {
+  event: "assigned" | "unassigned";
+  accountName: string | null;
+  emailId: string | null;
+};
+
+async function notifyAssignmentWebhook(payload: AssignmentWebhookEvent) {
+  const webhookUrl =
+    payload.event === "assigned"
+      ? process.env.N8N_STAR_WEBHOOK_URL
+      : process.env.N8N_UNSTAR_WEBHOOK_URL;
+  if (!webhookUrl) return;
+
+  try {
+    await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        accountName: payload.accountName,
+        emailId: payload.emailId,
+      }),
+    });
+  } catch (error) {
+    console.error("n8n webhook notification failed", error);
+  }
+}
+
 export async function POST(request: Request) {
   let payload: unknown;
 
@@ -54,9 +81,10 @@ export async function POST(request: Request) {
 
     const transaction = await client.query(
       `
-      SELECT id, amount
-      FROM transactions
-      WHERE id = $1
+      SELECT t.id, t.amount, t.email_id, g.account_name as account_name
+      FROM transactions t
+      LEFT JOIN gmail_accounts g ON g.id = t.gmail_account_id
+      WHERE t.id = $1
       LIMIT 1
       `,
       [parsed.data.transactionId],
@@ -71,6 +99,16 @@ export async function POST(request: Request) {
     }
 
     const amountUsd = Math.abs(Number(transaction.rows[0].amount ?? 0));
+    const emailId =
+      transaction.rows[0].email_id === null ||
+      transaction.rows[0].email_id === undefined
+        ? null
+        : String(transaction.rows[0].email_id);
+    const accountName =
+      transaction.rows[0].account_name === null ||
+      transaction.rows[0].account_name === undefined
+        ? null
+        : String(transaction.rows[0].account_name);
     const priceApplied = Number(remesero.rows[0].precio_actual ?? 0);
     const debtAmount = amountUsd * priceApplied;
 
@@ -108,6 +146,12 @@ export async function POST(request: Request) {
     );
 
     await client.query("COMMIT");
+
+    void notifyAssignmentWebhook({
+      event: "assigned",
+      accountName,
+      emailId,
+    });
 
     return Response.json(
       {
@@ -154,12 +198,41 @@ export async function DELETE(request: Request) {
   const client = await getPool().connect();
 
   try {
+    const transaction = await client.query(
+      `
+      SELECT t.id, t.email_id, g.account_name as account_name
+      FROM transactions t
+      LEFT JOIN gmail_accounts g ON g.id = t.gmail_account_id
+      WHERE t.id = $1
+      LIMIT 1
+      `,
+      [parsed.data.transactionId],
+    );
+
+    if (!transaction.rows[0]?.id) {
+      return Response.json(
+        { ok: false, error: "transaction_not_found" },
+        { status: 404 },
+      );
+    }
+
+    const emailId =
+      transaction.rows[0].email_id === null ||
+      transaction.rows[0].email_id === undefined
+        ? null
+        : String(transaction.rows[0].email_id);
+    const accountName =
+      transaction.rows[0].account_name === null ||
+      transaction.rows[0].account_name === undefined
+        ? null
+        : String(transaction.rows[0].account_name);
+
     const updated = await client.query(
       `
       UPDATE remesero_transaction_assignments
       SET unassigned_at = now(), updated_at = now()
       WHERE transaction_id = $1 AND unassigned_at IS NULL
-      RETURNING id
+      RETURNING id, remesero_id as "remeseroId"
       `,
       [parsed.data.transactionId],
     );
@@ -170,6 +243,12 @@ export async function DELETE(request: Request) {
         { status: 404 },
       );
     }
+
+    void notifyAssignmentWebhook({
+      event: "unassigned",
+      accountName,
+      emailId,
+    });
 
     return Response.json({ ok: true }, { status: 200 });
   } finally {
