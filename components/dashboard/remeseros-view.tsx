@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ChevronDown, ChevronUp, Plus } from "lucide-react";
+import { ChevronDown, ChevronUp, MessageCircle, Plus } from "lucide-react";
 import type { Remesero, RemeseroPayment } from "@/lib/types";
 
 type RemeserosViewProps = {
@@ -219,6 +219,21 @@ export function RemeserosView({
     }
   };
 
+  const handleShareWhatsapp = (remesero: Remesero) => {
+    const emojiClipboard = String.fromCodePoint(0x1f4cb);
+    const emojiPerson = String.fromCodePoint(0x1f464);
+    const emojiMoney = String.fromCodePoint(0x1f4b0);
+
+    const message =
+      `${emojiClipboard} *Cuadre de Ventas*\n\n` +
+      `${emojiPerson} *${remesero.nombre}*\n\n` +
+      `${emojiMoney} *Deuda actual:* ${formatLocal(remesero.deudaActual)}`;
+    const encodedMessage = encodeURIComponent(message);
+    const url = `https://api.whatsapp.com/send?text=${encodedMessage}`;
+
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   const handleRevertPayment = async (remeseroId: string, paymentId: string) => {
     setRevertingPaymentById((prev) => ({ ...prev, [paymentId]: true }));
     try {
@@ -270,7 +285,16 @@ export function RemeserosView({
             >
               <CardHeader className="pb-2 space-y-3">
                 {isExpanded && (
-                  <div className="flex justify-end">
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => handleShareWhatsapp(remesero)}
+                    >
+                      <MessageCircle className="h-4 w-4 mr-1" /> Compartir
+                    </Button>
                     <Button
                       type="button"
                       variant="ghost"
@@ -311,7 +335,16 @@ export function RemeserosView({
                   </div>
                 </div>
                 {!isExpanded && (
-                  <div className="flex justify-center">
+                  <div className="flex justify-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => handleShareWhatsapp(remesero)}
+                    >
+                      <MessageCircle className="h-4 w-4 mr-1" /> Compartir
+                    </Button>
                     <Button
                       type="button"
                       variant="ghost"
