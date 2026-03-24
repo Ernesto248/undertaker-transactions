@@ -221,13 +221,19 @@ export function RemeserosView({
 
   const handleShareWhatsapp = (remesero: Remesero) => {
     const emojiClipboard = String.fromCodePoint(0x1f4cb);
+    const emojiAlert = String.fromCodePoint(0x1f6a8);
+    const emojiSparkles = String.fromCodePoint(0x2728);
     const emojiPerson = String.fromCodePoint(0x1f464);
     const emojiMoney = String.fromCodePoint(0x1f4b0);
+    const emojiFire = String.fromCodePoint(0x1f525);
+    const emojiChart = String.fromCodePoint(0x1f4c8);
+    const emojiTarget = String.fromCodePoint(0x1f3af);
 
     const message =
-      `${emojiClipboard} *Cuadre de Ventas*\n\n` +
-      `${emojiPerson} *${remesero.nombre}*\n\n` +
-      `${emojiMoney} *Deuda actual:* ${formatLocal(remesero.deudaActual)}`;
+      `${emojiAlert} ${emojiClipboard} ${emojiSparkles} *CUADRE DE VENTAS* ${emojiSparkles} ${emojiAlert}\n\n` +
+      `${emojiPerson} ${emojiFire} *REMESERO:* *${remesero.nombre.toUpperCase()}* ${emojiFire}\n\n` +
+      `${emojiMoney} ${emojiChart} *DEUDA ACTUAL:* *${formatLocal(remesero.deudaActual)} CUP* ${emojiTarget}\n\n` +
+      `${emojiFire} *PONTE AL DIA HOY* ${emojiFire}`;
     const encodedMessage = encodeURIComponent(message);
     const url = `https://api.whatsapp.com/send?text=${encodedMessage}`;
 
