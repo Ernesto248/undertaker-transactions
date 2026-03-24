@@ -49,6 +49,9 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
   const [bankFilter, setBankFilter] = useState("all");
   const [accountFilter, setAccountFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [senderFilter, setSenderFilter] = useState("");
+  const [amountFilter, setAmountFilter] = useState("");
+  const [remeseroFilter, setRemeseroFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [customDateRange, setCustomDateRange] = useState<{
     from: Date | undefined;
@@ -70,6 +73,16 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
     return Array.from(new Set(transactions.map((t) => t.accountName))).sort(
       (a, b) => a.localeCompare(b),
     );
+  }, [transactions]);
+
+  const remeseroOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        transactions
+          .map((t) => t.assignedRemeseroNombre)
+          .filter((name): name is string => Boolean(name && name.trim())),
+      ),
+    ).sort((a, b) => a.localeCompare(b));
   }, [transactions]);
 
   const refreshTransactions = async () => {
@@ -271,12 +284,24 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
         accountFilter === "all" || transaction.accountName === accountFilter;
       const matchesSearch =
         searchQuery === "" ||
-        transaction.senderName
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase()) ||
         transaction.confirmationCode
           .toLowerCase()
           .includes(searchQuery.toLowerCase());
+      const matchesSender =
+        senderFilter.trim() === "" ||
+        transaction.senderName
+          .toLowerCase()
+          .includes(senderFilter.trim().toLowerCase());
+      const parsedAmount = Number(amountFilter);
+      const matchesAmount =
+        amountFilter.trim() === "" ||
+        (Number.isFinite(parsedAmount) && transaction.amount === parsedAmount);
+      const matchesRemesero =
+        remeseroFilter === "all"
+          ? true
+          : remeseroFilter === "unassigned"
+            ? !transaction.assignedRemeseroNombre
+            : transaction.assignedRemeseroNombre === remeseroFilter;
 
       // Date filtering
       let matchesDate = true;
@@ -311,12 +336,23 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
         matchesDate = isWithinInterval(transactionDate, { start, end });
       }
 
-      return matchesBank && matchesAccount && matchesSearch && matchesDate;
+      return (
+        matchesBank &&
+        matchesAccount &&
+        matchesSearch &&
+        matchesSender &&
+        matchesAmount &&
+        matchesRemesero &&
+        matchesDate
+      );
     });
   }, [
     bankFilter,
     accountFilter,
     searchQuery,
+    senderFilter,
+    amountFilter,
+    remeseroFilter,
     dateFilter,
     customDateRange,
     transactions,
@@ -330,16 +366,43 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
         accountFilter === "all" || transaction.accountName === accountFilter;
       const matchesSearch =
         searchQuery === "" ||
-        transaction.senderName
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase()) ||
         transaction.confirmationCode
           .toLowerCase()
           .includes(searchQuery.toLowerCase());
+      const matchesSender =
+        senderFilter.trim() === "" ||
+        transaction.senderName
+          .toLowerCase()
+          .includes(senderFilter.trim().toLowerCase());
+      const parsedAmount = Number(amountFilter);
+      const matchesAmount =
+        amountFilter.trim() === "" ||
+        (Number.isFinite(parsedAmount) && transaction.amount === parsedAmount);
+      const matchesRemesero =
+        remeseroFilter === "all"
+          ? true
+          : remeseroFilter === "unassigned"
+            ? !transaction.assignedRemeseroNombre
+            : transaction.assignedRemeseroNombre === remeseroFilter;
 
-      return matchesBank && matchesAccount && matchesSearch;
+      return (
+        matchesBank &&
+        matchesAccount &&
+        matchesSearch &&
+        matchesSender &&
+        matchesAmount &&
+        matchesRemesero
+      );
     });
-  }, [bankFilter, accountFilter, searchQuery, transactions]);
+  }, [
+    bankFilter,
+    accountFilter,
+    searchQuery,
+    senderFilter,
+    amountFilter,
+    remeseroFilter,
+    transactions,
+  ]);
 
   const toTrend = (current: number, previous: number) => {
     if (!Number.isFinite(current) || !Number.isFinite(previous))
@@ -460,6 +523,13 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
                   accountOptions={accountOptions}
                   searchQuery={searchQuery}
                   setSearchQuery={setSearchQuery}
+                  senderFilter={senderFilter}
+                  setSenderFilter={setSenderFilter}
+                  amountFilter={amountFilter}
+                  setAmountFilter={setAmountFilter}
+                  remeseroFilter={remeseroFilter}
+                  setRemeseroFilter={setRemeseroFilter}
+                  remeseroOptions={remeseroOptions}
                   dateFilter={dateFilter}
                   setDateFilter={setDateFilter}
                   customDateRange={customDateRange}
@@ -550,6 +620,13 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
                   accountOptions={accountOptions}
                   searchQuery={searchQuery}
                   setSearchQuery={setSearchQuery}
+                  senderFilter={senderFilter}
+                  setSenderFilter={setSenderFilter}
+                  amountFilter={amountFilter}
+                  setAmountFilter={setAmountFilter}
+                  remeseroFilter={remeseroFilter}
+                  setRemeseroFilter={setRemeseroFilter}
+                  remeseroOptions={remeseroOptions}
                   dateFilter={dateFilter}
                   setDateFilter={setDateFilter}
                   customDateRange={customDateRange}
@@ -600,6 +677,13 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
                   accountOptions={accountOptions}
                   searchQuery={searchQuery}
                   setSearchQuery={setSearchQuery}
+                  senderFilter={senderFilter}
+                  setSenderFilter={setSenderFilter}
+                  amountFilter={amountFilter}
+                  setAmountFilter={setAmountFilter}
+                  remeseroFilter={remeseroFilter}
+                  setRemeseroFilter={setRemeseroFilter}
+                  remeseroOptions={remeseroOptions}
                   dateFilter={dateFilter}
                   setDateFilter={setDateFilter}
                   customDateRange={customDateRange}
