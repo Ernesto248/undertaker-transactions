@@ -228,12 +228,12 @@ export function RemeserosView({
     const emojiFire = String.fromCodePoint(0x1f525);
     const emojiChart = String.fromCodePoint(0x1f4c8);
     const emojiTarget = String.fromCodePoint(0x1f3af);
+    const balanceType = remesero.deudaActual >= 0 ? "DEUDA" : "FONDO";
 
     const message =
       `${emojiAlert} ${emojiClipboard} ${emojiSparkles} *CUADRE DE VENTAS* ${emojiSparkles} ${emojiAlert}\n\n` +
       `${emojiPerson} ${emojiFire} *REMESERO:* *${remesero.nombre.toUpperCase()}* ${emojiFire}\n\n` +
-      `${emojiMoney} ${emojiChart} *DEUDA ACTUAL:* *${formatLocal(remesero.deudaActual)} CUP* ${emojiTarget}\n\n` +
-      `${emojiFire} *PONTE AL DIA HOY* ${emojiFire}`;
+      `${emojiMoney} ${emojiChart} *SALDO ACTUAL (${balanceType}):* *${formatLocal(remesero.deudaActual)} CUP* ${emojiTarget}`;
     const encodedMessage = encodeURIComponent(message);
     const url = `https://api.whatsapp.com/send?text=${encodedMessage}`;
 
