@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ChevronDown, ChevronUp, MessageCircle, Plus } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { Remesero, RemeseroPayment } from "@/lib/types";
 
 type RemeserosViewProps = {
@@ -330,11 +331,25 @@ export function RemeserosView({
                         {formatPrice(remesero.precioActual)}
                       </p>
                     </div>
-                    <div className="rounded-xl border border-primary/20 bg-primary/10 px-3 py-2">
+                    <div
+                      className={cn(
+                        "rounded-xl px-3 py-2",
+                        remesero.deudaActual < 0
+                          ? "border border-[hsl(var(--success))]/20 bg-[hsl(var(--success))]/10"
+                          : "border border-primary/20 bg-primary/10",
+                      )}
+                    >
                       <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                         Deuda actual
                       </p>
-                      <p className="text-sm md:text-base font-semibold text-primary mt-1">
+                      <p
+                        className={cn(
+                          "text-sm md:text-base font-semibold mt-1",
+                          remesero.deudaActual < 0
+                            ? "text-[hsl(var(--success))]"
+                            : "text-primary",
+                        )}
+                      >
                         {formatLocal(remesero.deudaActual)}
                       </p>
                     </div>

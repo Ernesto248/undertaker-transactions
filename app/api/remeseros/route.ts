@@ -73,10 +73,10 @@ export async function POST(request: Request) {
     const inserted = await client.query(
       `
       INSERT INTO remeseros (nombre, precio_actual, deuda_actual)
-      VALUES ($1, $2)
+      VALUES ($1, $2, $3)
       RETURNING id, nombre, precio_actual as "precioActual", deuda_actual as "deudaActual", created_at as "createdAt", updated_at as "updatedAt"
       `,
-      [parsed.data.nombre, parsed.data.precioActual],
+      [parsed.data.nombre, parsed.data.precioActual, 0],
     );
 
     const remesero = mapRemeseroRow(inserted.rows[0]);

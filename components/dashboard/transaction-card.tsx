@@ -43,6 +43,34 @@ const bankColors: Record<string, string> = {
   "Bank of America": "bg-destructive/10 text-destructive border-destructive/20",
 };
 
+const bankPalette = [
+  "bg-blue-500/10 text-blue-300 border-blue-500/20",
+  "bg-amber-500/10 text-amber-300 border-amber-500/20",
+  "bg-teal-500/10 text-teal-300 border-teal-500/20",
+  "bg-rose-500/10 text-rose-300 border-rose-500/20",
+  "bg-indigo-500/10 text-indigo-300 border-indigo-500/20",
+];
+
+const accountPalette = [
+  "bg-emerald-500/10 text-emerald-300 border-emerald-500/20",
+  "bg-cyan-500/10 text-cyan-300 border-cyan-500/20",
+  "bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/20",
+  "bg-lime-500/10 text-lime-300 border-lime-500/20",
+  "bg-orange-500/10 text-orange-300 border-orange-500/20",
+];
+
+function paletteByText(text: string, palette: string[]) {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) return palette[0];
+
+  let hash = 0;
+  for (let i = 0; i < normalized.length; i += 1) {
+    hash = (hash * 31 + normalized.charCodeAt(i)) >>> 0;
+  }
+
+  return palette[hash % palette.length];
+}
+
 const typeIcons = {
   deposit: ArrowDownLeft,
   withdrawal: ArrowUpRight,
@@ -66,6 +94,13 @@ export function TransactionCard({
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [selectedRemeseroId, setSelectedRemeseroId] = useState<string>("");
   const TypeIcon = typeIcons[transaction.type];
+  const bankBadgeColor =
+    bankColors[transaction.bank] ??
+    paletteByText(transaction.bank, bankPalette);
+  const accountBadgeColor = paletteByText(
+    transaction.accountName,
+    accountPalette,
+  );
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -133,12 +168,15 @@ export function TransactionCard({
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <Badge
                 variant="outline"
-                className={cn(
-                  "text-[10px] md:text-xs",
-                  bankColors[transaction.bank],
-                )}
+                className={cn("text-[10px] md:text-xs", bankBadgeColor)}
               >
                 {transaction.bank}
+              </Badge>
+              <Badge
+                variant="outline"
+                className={cn("text-[10px] md:text-xs", accountBadgeColor)}
+              >
+                {transaction.accountName}
               </Badge>
               {transaction.assignedRemeseroNombre ? (
                 <Badge
