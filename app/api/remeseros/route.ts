@@ -33,22 +33,10 @@ export async function GET() {
         r.id,
         r.nombre,
         r.precio_actual as "precioActual",
-        (COALESCE(d.total_debt, 0) - COALESCE(p.total_paid, 0)) as "deudaActual",
+        r.deuda_actual as "deudaActual",
         r.created_at as "createdAt",
         r.updated_at as "updatedAt"
       FROM remeseros r
-      LEFT JOIN (
-        SELECT remesero_id, SUM(debt_amount) as total_debt
-        FROM remesero_transaction_assignments
-        WHERE unassigned_at IS NULL
-        GROUP BY remesero_id
-      ) d ON d.remesero_id = r.id
-      LEFT JOIN (
-        SELECT remesero_id, SUM(amount_paid) as total_paid
-        FROM remesero_payments
-        WHERE reverted_at IS NULL
-        GROUP BY remesero_id
-      ) p ON p.remesero_id = r.id
       WHERE r.deleted_at IS NULL
       ORDER BY r.created_at DESC
       `,
@@ -84,9 +72,9 @@ export async function POST(request: Request) {
   try {
     const inserted = await client.query(
       `
-      INSERT INTO remeseros (nombre, precio_actual)
+      INSERT INTO remeseros (nombre, precio_actual, deuda_actual)
       VALUES ($1, $2)
-      RETURNING id, nombre, precio_actual as "precioActual", 0::numeric as "deudaActual", created_at as "createdAt", updated_at as "updatedAt"
+      RETURNING id, nombre, precio_actual as "precioActual", deuda_actual as "deudaActual", created_at as "createdAt", updated_at as "updatedAt"
       `,
       [parsed.data.nombre, parsed.data.precioActual],
     );

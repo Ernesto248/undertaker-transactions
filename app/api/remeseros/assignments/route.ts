@@ -112,14 +112,27 @@ export async function POST(request: Request) {
     const priceApplied = Number(remesero.rows[0].precio_actual ?? 0);
     const debtAmount = amountUsd * priceApplied;
 
-    await client.query(
+    const previousAssignment = await client.query(
       `
       UPDATE remesero_transaction_assignments
       SET unassigned_at = now(), updated_at = now()
       WHERE transaction_id = $1 AND unassigned_at IS NULL
+      RETURNING remesero_id as "remeseroId", debt_amount as "debtAmount"
       `,
       [parsed.data.transactionId],
     );
+
+    const previous = previousAssignment.rows[0];
+    if (previous?.remeseroId) {
+      await client.query(
+        `
+        UPDATE remeseros
+        SET deuda_actual = deuda_actual - $1, updated_at = now()
+        WHERE id = $2
+        `,
+        [Number(previous.debtAmount ?? 0), String(previous.remeseroId)],
+      );
+    }
 
     const assigned = await client.query(
       `
@@ -143,6 +156,15 @@ export async function POST(request: Request) {
         priceApplied,
         debtAmount,
       ],
+    );
+
+    await client.query(
+      `
+      UPDATE remeseros
+      SET deuda_actual = deuda_actual + $1, updated_at = now()
+      WHERE id = $2
+      `,
+      [debtAmount, parsed.data.remeseroId],
     );
 
     await client.query("COMMIT");
@@ -198,6 +220,8 @@ export async function DELETE(request: Request) {
   const client = await getPool().connect();
 
   try {
+    await client.query("BEGIN");
+
     const transaction = await client.query(
       `
       SELECT t.id, t.email_id, g.account_name as account_name
@@ -210,6 +234,7 @@ export async function DELETE(request: Request) {
     );
 
     if (!transaction.rows[0]?.id) {
+      await client.query("ROLLBACK");
       return Response.json(
         { ok: false, error: "transaction_not_found" },
         { status: 404 },
@@ -232,17 +257,32 @@ export async function DELETE(request: Request) {
       UPDATE remesero_transaction_assignments
       SET unassigned_at = now(), updated_at = now()
       WHERE transaction_id = $1 AND unassigned_at IS NULL
-      RETURNING id, remesero_id as "remeseroId"
+      RETURNING id, remesero_id as "remeseroId", debt_amount as "debtAmount"
       `,
       [parsed.data.transactionId],
     );
 
     if (!updated.rows[0]?.id) {
+      await client.query("ROLLBACK");
       return Response.json(
         { ok: false, error: "active_assignment_not_found" },
         { status: 404 },
       );
     }
+
+    await client.query(
+      `
+      UPDATE remeseros
+      SET deuda_actual = deuda_actual - $1, updated_at = now()
+      WHERE id = $2
+      `,
+      [
+        Number(updated.rows[0].debtAmount ?? 0),
+        String(updated.rows[0].remeseroId),
+      ],
+    );
+
+    await client.query("COMMIT");
 
     void notifyAssignmentWebhook({
       event: "unassigned",
@@ -251,6 +291,12 @@ export async function DELETE(request: Request) {
     });
 
     return Response.json({ ok: true }, { status: 200 });
+  } catch {
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
+
+    return Response.json({ ok: false, error: "server_error" }, { status: 500 });
   } finally {
     client.release();
   }

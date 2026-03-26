@@ -61,21 +61,28 @@ export function AccountsView({
     >
   >({});
 
+  const visibleAccounts = useMemo(() => {
+    return accounts.filter((account) => {
+      const normalized = account.accountName.toLowerCase().trim();
+      return !normalized.startsWith("vigo capital");
+    });
+  }, [accounts]);
+
   const totals = useMemo(() => {
-    const totalBalance = accounts.reduce(
+    const totalBalance = visibleAccounts.reduce(
       (sum, account) => sum + account.balance,
       0,
     );
-    const totalIncoming = accounts.reduce(
+    const totalIncoming = visibleAccounts.reduce(
       (sum, account) => sum + account.incomingTotal,
       0,
     );
-    const totalOutgoing = accounts.reduce(
+    const totalOutgoing = visibleAccounts.reduce(
       (sum, account) => sum + account.outgoingTotal,
       0,
     );
     return { totalBalance, totalIncoming, totalOutgoing };
-  }, [accounts]);
+  }, [visibleAccounts]);
 
   const formatLocal = (amount: number) => {
     return new Intl.NumberFormat("es-DO", {
@@ -158,7 +165,7 @@ export function AccountsView({
             Cuentas
           </h2>
           <p className="text-sm text-muted-foreground">
-            {accounts.length} cuentas · Saldo total:{" "}
+            {visibleAccounts.length} cuentas · Saldo total:{" "}
             {formatLocal(totals.totalBalance)}
           </p>
         </div>
@@ -212,7 +219,7 @@ export function AccountsView({
       </div>
 
       <div className="grid gap-4">
-        {accounts.map((account) => {
+        {visibleAccounts.map((account) => {
           const isExpanded = expandedById[account.id] === true;
           const draft = getDraft(account.id);
           const movements = movementsByAccount[account.id] ?? [];
@@ -439,7 +446,7 @@ export function AccountsView({
           );
         })}
 
-        {accounts.length === 0 && (
+        {visibleAccounts.length === 0 && (
           <Card className="border-border/70 bg-card/60">
             <CardContent className="py-10 text-center">
               <p className="text-muted-foreground">

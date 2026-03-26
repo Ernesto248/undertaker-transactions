@@ -54,6 +54,8 @@ export async function GET(
   const client = await getPool().connect();
 
   try {
+    await client.query("BEGIN");
+
     const remesero = await client.query(
       `
       SELECT id
@@ -65,6 +67,7 @@ export async function GET(
     );
 
     if (!remesero.rows[0]?.id) {
+      await client.query("ROLLBACK");
       return Response.json(
         { ok: false, error: "remesero_not_found" },
         { status: 404 },
@@ -163,7 +166,24 @@ export async function POST(
 
     const payment = mapPaymentRow(inserted.rows[0]);
 
+    await client.query(
+      `
+      UPDATE remeseros
+      SET deuda_actual = deuda_actual - $1, updated_at = now()
+      WHERE id = $2
+      `,
+      [parsed.data.amountPaid, id],
+    );
+
+    await client.query("COMMIT");
+
     return Response.json({ ok: true, payment }, { status: 201 });
+  } catch {
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
+
+    return Response.json({ ok: false, error: "server_error" }, { status: 500 });
   } finally {
     client.release();
   }
@@ -198,6 +218,8 @@ export async function DELETE(
   const client = await getPool().connect();
 
   try {
+    await client.query("BEGIN");
+
     const updated = await client.query(
       `
       UPDATE remesero_payments
@@ -216,16 +238,34 @@ export async function DELETE(
     );
 
     if (!updated.rows[0]?.id) {
+      await client.query("ROLLBACK");
       return Response.json(
         { ok: false, error: "payment_not_found_or_already_reverted" },
         { status: 404 },
       );
     }
 
+    await client.query(
+      `
+      UPDATE remeseros
+      SET deuda_actual = deuda_actual + $1, updated_at = now()
+      WHERE id = $2
+      `,
+      [Number(updated.rows[0].amountPaid ?? 0), id],
+    );
+
+    await client.query("COMMIT");
+
     return Response.json(
       { ok: true, payment: mapPaymentRow(updated.rows[0]) },
       { status: 200 },
     );
+  } catch {
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
+
+    return Response.json({ ok: false, error: "server_error" }, { status: 500 });
   } finally {
     client.release();
   }

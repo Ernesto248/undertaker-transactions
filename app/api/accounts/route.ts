@@ -113,7 +113,6 @@ export async function GET(request: Request) {
         ${movementWhere}
         GROUP BY gmail_account_id
       ) m ON m.gmail_account_id = g.id
-      WHERE g.account_name !~* '^\\s*vigo\\s+capital\\s+solutions(\\s+llc)?\\s*$'
       ORDER BY g.account_name ASC
       `,
       values,
