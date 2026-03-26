@@ -233,7 +233,7 @@ export function RemeserosView({
 
     const message =
       `${emojiAlert} ${emojiClipboard} ${emojiSparkles} *CUADRE DE VENTAS* ${emojiSparkles} ${emojiAlert}\n\n` +
-      `${emojiPerson} ${emojiFire} *REMESERO:* *${remesero.nombre.toUpperCase()}* ${emojiFire}\n\n` +
+      `${emojiPerson} ${emojiFire} *GESTOR:* *${remesero.nombre.toUpperCase()}* ${emojiFire}\n\n` +
       `${emojiMoney} ${emojiChart} *SALDO ACTUAL (${balanceType}):* *${formatLocal(remesero.deudaActual)} CUP* ${emojiTarget}`;
     const encodedMessage = encodeURIComponent(message);
     const url = `https://api.whatsapp.com/send?text=${encodedMessage}`;
