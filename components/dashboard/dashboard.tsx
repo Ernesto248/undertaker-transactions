@@ -8,14 +8,20 @@ import { DesktopNav } from "./desktop-nav";
 import { StatCard } from "./stat-card";
 import { TransactionCard } from "./transaction-card";
 import { TransactionsChart } from "./transactions-chart";
-import { EmailAccountsCard } from "./email-accounts-card";
 import { BankDistributionChart } from "./bank-distribution-chart";
 import { BankTotalsCard } from "./bank-totals-card";
 import { FilterBar, type DateFilter } from "./filter-bar";
-import { SettingsView } from "./settings-view";
+import { AccountsView } from "./accounts-view";
 import { RemeserosView } from "./remeseros-view";
 import { DollarSign, TrendingUp, Calendar } from "lucide-react";
-import { Remesero, RemeseroPayment, Transaction } from "@/lib/types";
+import {
+  AccountBalance,
+  AccountMovement,
+  AccountMovementType,
+  Remesero,
+  RemeseroPayment,
+  Transaction,
+} from "@/lib/types";
 import {
   startOfDay,
   endOfDay,
@@ -34,12 +40,20 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [transactions, setTransactions] =
     useState<Transaction[]>(initialTransactions);
+  const [accounts, setAccounts] = useState<AccountBalance[]>([]);
+  const [movementsByAccount, setMovementsByAccount] = useState<
+    Record<string, AccountMovement[]>
+  >({});
   const [remeseros, setRemeseros] = useState<Remesero[]>([]);
   const [paymentsByRemesero, setPaymentsByRemesero] = useState<
     Record<string, RemeseroPayment[]>
   >({});
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
   const [isLoadingRemeseros, setIsLoadingRemeseros] = useState(false);
+  const [loadingMovementsByAccount, setLoadingMovementsByAccount] = useState<
+    Record<string, boolean>
+  >({});
   const [loadingPaymentsByRemesero, setLoadingPaymentsByRemesero] = useState<
     Record<string, boolean>
   >({});
@@ -122,10 +136,94 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
     }
   };
 
+  const refreshAccounts = async () => {
+    setIsLoadingAccounts(true);
+    try {
+      const res = await fetch(apiUrl("/api/accounts"), { cache: "no-store" });
+      if (!res.ok) return;
+
+      const data = (await res.json()) as {
+        ok?: boolean;
+        accounts?: AccountBalance[];
+      };
+
+      if (!data?.ok || !Array.isArray(data.accounts)) return;
+      setAccounts(data.accounts);
+    } catch {
+      return;
+    } finally {
+      setIsLoadingAccounts(false);
+    }
+  };
+
+  const loadAccountMovements = async (accountId: string) => {
+    setLoadingMovementsByAccount((prev) => ({ ...prev, [accountId]: true }));
+    try {
+      const res = await fetch(apiUrl(`/api/accounts/${accountId}/movements`), {
+        cache: "no-store",
+      });
+
+      if (!res.ok) return;
+
+      const data = (await res.json()) as {
+        ok?: boolean;
+        movements?: AccountMovement[];
+      };
+
+      if (!data?.ok || !Array.isArray(data.movements)) return;
+      setMovementsByAccount((prev) => ({
+        ...prev,
+        [accountId]: data.movements,
+      }));
+    } finally {
+      setLoadingMovementsByAccount((prev) => ({ ...prev, [accountId]: false }));
+    }
+  };
+
+  const createAccountMovement = async (
+    accountId: string,
+    input: { movementType: AccountMovementType; amount: number; note?: string },
+  ) => {
+    const res = await fetch(apiUrl("/api/accounts"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        accountId,
+        movementType: input.movementType,
+        amount: input.amount,
+        note: input.note,
+      }),
+    });
+
+    if (!res.ok) return;
+
+    await Promise.all([refreshAccounts(), loadAccountMovements(accountId)]);
+  };
+
+  const revertAccountMovement = async (
+    accountId: string,
+    movementId: string,
+    reason?: string,
+  ) => {
+    const res = await fetch(apiUrl("/api/accounts"), {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ movementId, reason }),
+    });
+
+    if (!res.ok) return;
+
+    await Promise.all([refreshAccounts(), loadAccountMovements(accountId)]);
+  };
+
   const refreshData = async () => {
     setIsRefreshing(true);
     try {
-      await Promise.all([refreshTransactions(), refreshRemeseros()]);
+      await Promise.all([
+        refreshTransactions(),
+        refreshRemeseros(),
+        refreshAccounts(),
+      ]);
     } finally {
       setIsRefreshing(false);
     }
@@ -261,7 +359,7 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
   };
 
   useEffect(() => {
-    void refreshRemeseros();
+    void Promise.all([refreshRemeseros(), refreshAccounts()]);
   }, []);
 
   const formatCurrency = (amount: number) => {
@@ -467,31 +565,6 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
       .sort((a, b) => b.totalAmount - a.totalAmount);
   }, [filteredTransactions]);
 
-  const accountStats = useMemo(() => {
-    const accountMap = new Map<
-      string,
-      { transactionCount: number; totalAmount: number }
-    >();
-
-    filteredTransactions.forEach((t) => {
-      const current = accountMap.get(t.accountName) || {
-        transactionCount: 0,
-        totalAmount: 0,
-      };
-      accountMap.set(t.accountName, {
-        transactionCount: current.transactionCount + 1,
-        totalAmount: current.totalAmount + t.amount,
-      });
-    });
-
-    return Array.from(accountMap.entries())
-      .map(([accountName, data]) => ({
-        accountName,
-        ...data,
-      }))
-      .sort((a, b) => b.totalAmount - a.totalAmount);
-  }, [filteredTransactions]);
-
   return (
     <div className="min-h-screen bg-background">
       <Header
@@ -657,49 +730,17 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
               </div>
             )}
 
-            {activeTab === "analytics" && (
-              <div className="space-y-4 md:space-y-6">
-                <div>
-                  <h2 className="text-xl md:text-2xl font-bold text-foreground">
-                    Análisis
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    Estadísticas detalladas
-                  </p>
-                </div>
-
-                <FilterBar
-                  bankFilter={bankFilter}
-                  setBankFilter={setBankFilter}
-                  bankOptions={bankOptions}
-                  accountFilter={accountFilter}
-                  setAccountFilter={setAccountFilter}
-                  accountOptions={accountOptions}
-                  searchQuery={searchQuery}
-                  setSearchQuery={setSearchQuery}
-                  senderFilter={senderFilter}
-                  setSenderFilter={setSenderFilter}
-                  amountFilter={amountFilter}
-                  setAmountFilter={setAmountFilter}
-                  remeseroFilter={remeseroFilter}
-                  setRemeseroFilter={setRemeseroFilter}
-                  remeseroOptions={remeseroOptions}
-                  dateFilter={dateFilter}
-                  setDateFilter={setDateFilter}
-                  customDateRange={customDateRange}
-                  setCustomDateRange={setCustomDateRange}
-                />
-
-                <div className="grid gap-4 md:gap-6">
-                  <TransactionsChart transactions={filteredTransactions} />
-                  <div className="grid md:grid-cols-2 gap-4 md:gap-6">
-                    <BankDistributionChart
-                      transactions={filteredTransactions}
-                    />
-                    <EmailAccountsCard stats={accountStats} />
-                  </div>
-                </div>
-              </div>
+            {activeTab === "accounts" && (
+              <AccountsView
+                accounts={accounts}
+                movementsByAccount={movementsByAccount}
+                loadingAccounts={isLoadingAccounts}
+                loadingMovementsByAccount={loadingMovementsByAccount}
+                onRefreshAccounts={refreshAccounts}
+                onLoadMovements={loadAccountMovements}
+                onCreateMovement={createAccountMovement}
+                onRevertMovement={revertAccountMovement}
+              />
             )}
 
             {activeTab === "remeseros" && (
@@ -716,10 +757,6 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
                 onCreatePayment={createRemeseroPayment}
                 onRevertPayment={revertRemeseroPayment}
               />
-            )}
-
-            {activeTab === "settings" && (
-              <SettingsView accountOptions={accountOptions} />
             )}
           </div>
         </div>

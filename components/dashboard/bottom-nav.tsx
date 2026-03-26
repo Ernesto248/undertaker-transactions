@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, List, PieChart, Settings, Users } from "lucide-react";
+import { LayoutDashboard, List, Wallet, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 interface BottomNavProps {
@@ -12,9 +12,8 @@ interface BottomNavProps {
 const navItems = [
   { id: "dashboard", label: "Inicio", icon: LayoutDashboard },
   { id: "transactions", label: "Transacc.", icon: List },
-  { id: "analytics", label: "Análisis", icon: PieChart },
+  { id: "accounts", label: "Cuentas", icon: Wallet },
   { id: "remeseros", label: "Remeseros", icon: Users },
-  { id: "settings", label: "Config.", icon: Settings },
 ];
 
 export function BottomNav({ activeTab, setActiveTab }: BottomNavProps) {

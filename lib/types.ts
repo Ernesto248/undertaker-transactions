@@ -42,3 +42,26 @@ export type RemeseroPayment = {
   revertedAt: string | null;
   revertedReason: string | null;
 };
+
+export type AccountMovementType = "wire" | "expense";
+
+export type AccountBalance = {
+  id: string;
+  accountName: string;
+  incomingTotal: number;
+  outgoingTotal: number;
+  balance: number;
+  transactionCount: number;
+  lastTransactionAt: string | null;
+};
+
+export type AccountMovement = {
+  id: string;
+  accountId: string;
+  movementType: AccountMovementType;
+  amount: number;
+  note: string | null;
+  createdAt: string;
+  revertedAt: string | null;
+  revertedReason: string | null;
+};
