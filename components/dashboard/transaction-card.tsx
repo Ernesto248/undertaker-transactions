@@ -238,7 +238,7 @@ export function TransactionCard({
                   open={assignDialogOpen}
                   onOpenChange={setAssignDialogOpen}
                 >
-                  <DialogContent>
+                  <DialogContent className="max-h-[85svh] overflow-y-auto sm:max-w-md">
                     <DialogHeader>
                       <DialogTitle>
                         {transaction.assignedRemeseroId
@@ -261,7 +261,7 @@ export function TransactionCard({
                         <SelectTrigger>
                           <SelectValue placeholder="Selecciona un remesero" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-[45svh] overflow-y-auto">
                           {remeseros.map((remesero) => (
                             <SelectItem key={remesero.id} value={remesero.id}>
                               {remesero.nombre} - Precio {remesero.precioActual}

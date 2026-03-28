@@ -382,7 +382,7 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
         accountFilter === "all" || transaction.accountName === accountFilter;
       const matchesSearch =
         searchQuery === "" ||
-        transaction.confirmationCode
+        transaction.senderName
           .toLowerCase()
           .includes(searchQuery.toLowerCase());
       const matchesSender =
@@ -464,7 +464,7 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
         accountFilter === "all" || transaction.accountName === accountFilter;
       const matchesSearch =
         searchQuery === "" ||
-        transaction.confirmationCode
+        transaction.senderName
           .toLowerCase()
           .includes(searchQuery.toLowerCase());
       const matchesSender =
