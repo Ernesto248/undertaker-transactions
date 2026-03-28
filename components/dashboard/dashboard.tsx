@@ -66,7 +66,7 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
   const [senderFilter, setSenderFilter] = useState("");
   const [amountFilter, setAmountFilter] = useState("");
   const [remeseroFilter, setRemeseroFilter] = useState("all");
-  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("week");
   const [customDateRange, setCustomDateRange] = useState<{
     from: Date | undefined;
     to: Date | undefined;
