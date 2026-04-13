@@ -37,10 +37,34 @@ export type RemeseroPayment = {
   id: string;
   remeseroId: string;
   amountPaid: number;
+  debtBeforePayment?: number | null;
+  debtAfterPayment?: number | null;
   note: string | null;
   paidAt: string;
   revertedAt: string | null;
   revertedReason: string | null;
+};
+
+export type RemeseroShareSummaryGroup = {
+  priceApplied: number;
+  amountsUsd: number[];
+  txCount: number;
+  totalUsd: number;
+  totalCup: number;
+};
+
+export type RemeseroShareSummary = {
+  remeseroId: string;
+  remeseroNombre: string;
+  cutAt: string | null;
+  hasPaymentCut: boolean;
+  lastPaymentAmount: number | null;
+  inicioDebt: number;
+  totalTiradoUsd: number;
+  totalTiradoCup: number;
+  finalDebt: number;
+  finalDebtType: "DEUDA" | "FONDO";
+  groups: RemeseroShareSummaryGroup[];
 };
 
 export type AccountMovementType = "wire" | "expense";

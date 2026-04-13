@@ -27,6 +27,14 @@ function mapPaymentRow(row: any): RemeseroPayment {
     id: String(row.id),
     remeseroId: String(row.remeseroId),
     amountPaid: Number(row.amountPaid ?? 0),
+    debtBeforePayment:
+      row.debtBeforePayment === null || row.debtBeforePayment === undefined
+        ? null
+        : Number(row.debtBeforePayment),
+    debtAfterPayment:
+      row.debtAfterPayment === null || row.debtAfterPayment === undefined
+        ? null
+        : Number(row.debtAfterPayment),
     note: row.note === null || row.note === undefined ? null : String(row.note),
     paidAt: new Date(row.paidAt).toISOString(),
     revertedAt:
@@ -80,6 +88,8 @@ export async function GET(
         id,
         remesero_id as "remeseroId",
         amount_paid as "amountPaid",
+        deuda_antes_pago as "debtBeforePayment",
+        deuda_despues_pago as "debtAfterPayment",
         note,
         paid_at as "paidAt",
         reverted_at as "revertedAt",
@@ -127,22 +137,29 @@ export async function POST(
   const client = await getPool().connect();
 
   try {
+    await client.query("BEGIN");
+
     const remesero = await client.query(
       `
-      SELECT id
+      SELECT id, deuda_actual as "deudaActual"
       FROM remeseros
       WHERE id = $1 AND deleted_at IS NULL
+      FOR UPDATE
       LIMIT 1
       `,
       [id],
     );
 
     if (!remesero.rows[0]?.id) {
+      await client.query("ROLLBACK");
       return Response.json(
         { ok: false, error: "remesero_not_found" },
         { status: 404 },
       );
     }
+
+    const debtBeforePayment = Number(remesero.rows[0].deudaActual ?? 0);
+    const debtAfterPayment = debtBeforePayment - parsed.data.amountPaid;
 
     const paidAt = parsed.data.paidAt
       ? new Date(parsed.data.paidAt)
@@ -150,18 +167,29 @@ export async function POST(
 
     const inserted = await client.query(
       `
-      INSERT INTO remesero_payments (remesero_id, amount_paid, note, paid_at)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO remesero_payments
+        (remesero_id, amount_paid, deuda_antes_pago, deuda_despues_pago, note, paid_at)
+      VALUES
+        ($1, $2, $3, $4, $5, $6)
       RETURNING
         id,
         remesero_id as "remeseroId",
         amount_paid as "amountPaid",
+        deuda_antes_pago as "debtBeforePayment",
+        deuda_despues_pago as "debtAfterPayment",
         note,
         paid_at as "paidAt",
         reverted_at as "revertedAt",
         reverted_reason as "revertedReason"
       `,
-      [id, parsed.data.amountPaid, parsed.data.note ?? null, paidAt],
+      [
+        id,
+        parsed.data.amountPaid,
+        debtBeforePayment,
+        debtAfterPayment,
+        parsed.data.note ?? null,
+        paidAt,
+      ],
     );
 
     const payment = mapPaymentRow(inserted.rows[0]);
@@ -169,10 +197,10 @@ export async function POST(
     await client.query(
       `
       UPDATE remeseros
-      SET deuda_actual = deuda_actual - $1, updated_at = now()
+      SET deuda_actual = $1, updated_at = now()
       WHERE id = $2
       `,
-      [parsed.data.amountPaid, id],
+      [debtAfterPayment, id],
     );
 
     await client.query("COMMIT");
@@ -229,6 +257,8 @@ export async function DELETE(
         id,
         remesero_id as "remeseroId",
         amount_paid as "amountPaid",
+        deuda_antes_pago as "debtBeforePayment",
+        deuda_despues_pago as "debtAfterPayment",
         note,
         paid_at as "paidAt",
         reverted_at as "revertedAt",

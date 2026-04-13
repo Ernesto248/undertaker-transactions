@@ -15,7 +15,11 @@ import {
 } from "@/components/ui/dialog";
 import { ChevronDown, ChevronUp, MessageCircle, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Remesero, RemeseroPayment } from "@/lib/types";
+import type {
+  Remesero,
+  RemeseroPayment,
+  RemeseroShareSummary,
+} from "@/lib/types";
 
 type RemeserosViewProps = {
   remeseros: Remesero[];
@@ -42,6 +46,7 @@ type RemeserosViewProps = {
     paymentId: string,
     reason?: string,
   ) => Promise<void>;
+  onGetShareSummary: (id: string) => Promise<RemeseroShareSummary | null>;
 };
 
 export function RemeserosView({
@@ -56,6 +61,7 @@ export function RemeserosView({
   onLoadPayments,
   onCreatePayment,
   onRevertPayment,
+  onGetShareSummary,
 }: RemeserosViewProps) {
   const [newNombre, setNewNombre] = useState("");
   const [newPrecio, setNewPrecio] = useState("");
@@ -79,6 +85,7 @@ export function RemeserosView({
   const [revertingPaymentById, setRevertingPaymentById] = useState<
     Record<string, boolean>
   >({});
+  const [sharingById, setSharingById] = useState<Record<string, boolean>>({});
 
   const totals = useMemo(() => {
     const deudaTotal = remeseros.reduce(
@@ -102,6 +109,25 @@ export function RemeserosView({
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
+  };
+
+  const formatLocalFlexible = (amount: number) => {
+    return new Intl.NumberFormat("es-DO", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  };
+
+  const formatDateTime = (value: string) => {
+    return new Date(value).toLocaleString("es-DO", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
   };
 
   const formatPrice = (amount: number) => {
@@ -220,25 +246,61 @@ export function RemeserosView({
     }
   };
 
-  const handleShareWhatsapp = (remesero: Remesero) => {
-    const emojiClipboard = String.fromCodePoint(0x1f4cb);
-    const emojiAlert = String.fromCodePoint(0x1f6a8);
-    const emojiSparkles = String.fromCodePoint(0x2728);
-    const emojiPerson = String.fromCodePoint(0x1f464);
-    const emojiMoney = String.fromCodePoint(0x1f4b0);
-    const emojiFire = String.fromCodePoint(0x1f525);
-    const emojiChart = String.fromCodePoint(0x1f4c8);
-    const emojiTarget = String.fromCodePoint(0x1f3af);
-    const balanceType = remesero.deudaActual >= 0 ? "DEUDA" : "FONDO";
+  const handleShareWhatsapp = async (remesero: Remesero) => {
+    setSharingById((prev) => ({ ...prev, [remesero.id]: true }));
+    try {
+      const summary = await onGetShareSummary(remesero.id);
+      if (!summary) return;
 
-    const message =
-      `${emojiAlert} ${emojiClipboard} ${emojiSparkles} *CUADRE DE VENTAS* ${emojiSparkles} ${emojiAlert}\n\n` +
-      `${emojiPerson} ${emojiFire} *GESTOR:* *${remesero.nombre.toUpperCase()}* ${emojiFire}\n\n` +
-      `${emojiMoney} ${emojiChart} *SALDO ACTUAL (${balanceType}):* *${formatLocal(remesero.deudaActual)} CUP* ${emojiTarget}`;
-    const encodedMessage = encodeURIComponent(message);
-    const url = `https://api.whatsapp.com/send?text=${encodedMessage}`;
+      const inicioType = summary.inicioDebt >= 0 ? "deuda" : "fondo";
+      const finalType = summary.finalDebtType === "DEUDA" ? "deuda" : "fondo";
 
-    window.open(url, "_blank", "noopener,noreferrer");
+      const tiradoLines =
+        summary.groups.length === 0
+          ? ["Sin asignaciones desde el ultimo pago"]
+          : summary.groups.map((group) => {
+              const price = formatPrice(group.priceApplied);
+              const amounts = group.amountsUsd
+                .map((amount) => formatLocalFlexible(amount))
+                .join(", ");
+              return `${price} (${amounts})`;
+            });
+
+      const lastPaymentLines =
+        summary.hasPaymentCut &&
+        summary.lastPaymentAmount !== null &&
+        summary.cutAt
+          ? [
+              `💳 Monto: $ ${formatLocalFlexible(summary.lastPaymentAmount)}`,
+              `🕒 Fecha y hora: ${formatDateTime(summary.cutAt)}`,
+            ]
+          : ["⚠️ Sin pagos registrados"];
+
+      const message = [
+        `*👤 GESTOR:* ${summary.remeseroNombre}`,
+        "",
+        "*🚩 INICIO*",
+        `💰 $ ${formatLocalFlexible(Math.abs(summary.inicioDebt))} ${inicioType}`,
+        "",
+        "*🧾 ULTIMO PAGO*",
+        ...lastPaymentLines,
+        "",
+        "*📤 ZELLE TIRADO*",
+        ...tiradoLines,
+        "",
+        "*📊 TOTAL TIRADO*",
+        `💵 $ ${formatLocalFlexible(summary.totalTiradoCup)}`,
+        "",
+        "*🏁 FINAL*",
+        `💸 $ ${formatLocalFlexible(Math.abs(summary.finalDebt))} ${finalType}`,
+      ].join("\n");
+
+      const encodedMessage = encodeURIComponent(message);
+      const url = `https://api.whatsapp.com/send?text=${encodedMessage}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+    } finally {
+      setSharingById((prev) => ({ ...prev, [remesero.id]: false }));
+    }
   };
 
   const handleRevertPayment = async (remeseroId: string, paymentId: string) => {
@@ -299,8 +361,12 @@ export function RemeserosView({
                       size="sm"
                       className="shrink-0"
                       onClick={() => handleShareWhatsapp(remesero)}
+                      disabled={sharingById[remesero.id] === true}
                     >
-                      <MessageCircle className="h-4 w-4 mr-1" /> Compartir
+                      <MessageCircle className="h-4 w-4 mr-1" />
+                      {sharingById[remesero.id]
+                        ? "Compartiendo..."
+                        : "Compartir"}
                     </Button>
                     <Button
                       type="button"
@@ -363,8 +429,12 @@ export function RemeserosView({
                       size="sm"
                       className="shrink-0"
                       onClick={() => handleShareWhatsapp(remesero)}
+                      disabled={sharingById[remesero.id] === true}
                     >
-                      <MessageCircle className="h-4 w-4 mr-1" /> Compartir
+                      <MessageCircle className="h-4 w-4 mr-1" />
+                      {sharingById[remesero.id]
+                        ? "Compartiendo..."
+                        : "Compartir"}
                     </Button>
                     <Button
                       type="button"

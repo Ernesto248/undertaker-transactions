@@ -20,6 +20,7 @@ import {
   AccountMovementType,
   Remesero,
   RemeseroPayment,
+  RemeseroShareSummary,
   Transaction,
 } from "@/lib/types";
 import {
@@ -315,6 +316,27 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
     if (!res.ok) return;
 
     await Promise.all([refreshRemeseros(), loadRemeseroPayments(remeseroId)]);
+  };
+
+  const getRemeseroShareSummary = async (
+    remeseroId: string,
+  ): Promise<RemeseroShareSummary | null> => {
+    const res = await fetch(
+      apiUrl(`/api/remeseros/${remeseroId}/share-summary`),
+      {
+        cache: "no-store",
+      },
+    );
+
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as {
+      ok?: boolean;
+      summary?: RemeseroShareSummary;
+    };
+
+    if (!data?.ok || !data.summary) return null;
+    return data.summary;
   };
 
   const assignTransactionToRemesero = async (
@@ -756,6 +778,7 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
                 onLoadPayments={loadRemeseroPayments}
                 onCreatePayment={createRemeseroPayment}
                 onRevertPayment={revertRemeseroPayment}
+                onGetShareSummary={getRemeseroShareSummary}
               />
             )}
           </div>
