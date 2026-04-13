@@ -263,7 +263,7 @@ export function RemeserosView({
               const amounts = group.amountsUsd
                 .map((amount) => formatLocalFlexible(amount))
                 .join(", ");
-              return `${price} (${amounts})`;
+              return `${price} (${amounts}) = ${formatLocalFlexible(group.totalUsd)} USD`;
             });
 
       const lastPaymentLines =
@@ -279,14 +279,15 @@ export function RemeserosView({
       const message = [
         `*👤 GESTOR:* ${summary.remeseroNombre}`,
         "",
-        "*🚩 INICIO*",
-        `💰 $ ${formatLocalFlexible(Math.abs(summary.inicioDebt))} ${inicioType}`,
-        "",
         "*🧾 ULTIMO PAGO*",
         ...lastPaymentLines,
         "",
+        "*🚩 INICIO*",
+        `💰 $ ${formatLocalFlexible(Math.abs(summary.inicioDebt))} ${inicioType}`,
+        "",
         "*📤 ZELLE TIRADO*",
         ...tiradoLines,
+        `🧮 Total USD: ${formatLocalFlexible(summary.totalTiradoUsd)} USD`,
         "",
         "*📊 TOTAL TIRADO*",
         `💵 $ ${formatLocalFlexible(summary.totalTiradoCup)}`,
