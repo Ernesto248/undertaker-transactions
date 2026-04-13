@@ -305,15 +305,19 @@ export function RemeserosView({
       ].join("\n");
 
       const encodedMessage = encodeURIComponent(message);
-      const url = `https://api.whatsapp.com/send?text=${encodedMessage}`;
+      const appUrl = `whatsapp://send?text=${encodedMessage}`;
+      const webUrl = `https://api.whatsapp.com/send?text=${encodedMessage}`;
+      const isMobile =
+        typeof navigator !== "undefined" &&
+        /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      const targetUrl = isMobile ? appUrl : webUrl;
 
       if (pendingWindow && !pendingWindow.closed) {
-        pendingWindow.location.href = url;
+        pendingWindow.location.href = targetUrl;
         return;
       }
 
-      // Fallback cuando el popup fue bloqueado por el navegador.
-      window.location.assign(url);
+      window.location.assign(targetUrl);
     } finally {
       setSharingById((prev) => ({ ...prev, [remesero.id]: false }));
     }
