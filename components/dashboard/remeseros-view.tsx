@@ -247,18 +247,10 @@ export function RemeserosView({
   };
 
   const handleShareWhatsapp = async (remesero: Remesero) => {
-    // iOS Safari bloquea window.open si ocurre despues de awaits.
-    const pendingWindow = window.open("about:blank", "_blank");
-
     setSharingById((prev) => ({ ...prev, [remesero.id]: true }));
     try {
       const summary = await onGetShareSummary(remesero.id);
-      if (!summary) {
-        if (pendingWindow && !pendingWindow.closed) {
-          pendingWindow.close();
-        }
-        return;
-      }
+      if (!summary) return;
 
       const inicioType = summary.inicioDebt >= 0 ? "deuda" : "fondo";
       const finalType = summary.finalDebtType === "DEUDA" ? "deuda" : "fondo";
@@ -310,14 +302,13 @@ export function RemeserosView({
       const isMobile =
         typeof navigator !== "undefined" &&
         /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-      const targetUrl = isMobile ? appUrl : webUrl;
 
-      if (pendingWindow && !pendingWindow.closed) {
-        pendingWindow.location.href = targetUrl;
+      if (isMobile) {
+        window.location.href = appUrl;
         return;
       }
 
-      window.location.assign(targetUrl);
+      window.open(webUrl, "_blank", "noopener,noreferrer");
     } finally {
       setSharingById((prev) => ({ ...prev, [remesero.id]: false }));
     }
