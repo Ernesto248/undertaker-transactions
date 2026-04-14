@@ -38,6 +38,13 @@ function formatLocalFlexible(value: number) {
   }).format(value);
 }
 
+function formatThousandsInput(value: string) {
+  const digitsOnly = value.replace(/\D/g, "");
+  if (!digitsOnly) return "";
+
+  return digitsOnly.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString("es-DO", {
     year: "numeric",
@@ -600,9 +607,11 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
                         inputMode="numeric"
                         value={paymentAmount}
                         onChange={(event) =>
-                          setPaymentAmount(event.target.value)
+                          setPaymentAmount(
+                            formatThousandsInput(event.target.value),
+                          )
                         }
-                        placeholder="50000"
+                        placeholder="1,000"
                       />
                     </div>
                     <div className="space-y-2 md:col-span-2">
