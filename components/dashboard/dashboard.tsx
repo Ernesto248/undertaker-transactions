@@ -73,6 +73,22 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
     to: Date | undefined;
   }>({ from: undefined, to: undefined });
 
+  useEffect(() => {
+    const tabFromUrl = new URLSearchParams(window.location.search).get("tab");
+    if (!tabFromUrl) return;
+
+    const allowedTabs = new Set([
+      "dashboard",
+      "transactions",
+      "accounts",
+      "remeseros",
+    ]);
+
+    if (allowedTabs.has(tabFromUrl)) {
+      setActiveTab(tabFromUrl);
+    }
+  }, []);
+
   const apiUrl = (path: string) => {
     if (typeof window === "undefined") return path;
     return new URL(path, window.location.origin).toString();

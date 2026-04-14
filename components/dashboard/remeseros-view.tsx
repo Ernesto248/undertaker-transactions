@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -448,13 +449,14 @@ export function RemeserosView({
                         : "Compartir"}
                     </Button>
                     <Button
-                      type="button"
+                      asChild
                       variant="ghost"
                       size="sm"
                       className="shrink-0"
-                      onClick={() => toggleExpanded(remesero.id)}
                     >
-                      Expandir <ChevronDown className="h-4 w-4 ml-1" />
+                      <Link href={`/remeseros/${remesero.id}`}>
+                        Ver detalle <ChevronDown className="h-4 w-4 ml-1" />
+                      </Link>
                     </Button>
                   </div>
                 )}

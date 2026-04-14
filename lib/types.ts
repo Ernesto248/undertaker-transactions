@@ -67,6 +67,56 @@ export type RemeseroShareSummary = {
   groups: RemeseroShareSummaryGroup[];
 };
 
+export type RemeseroDetailRangeOption = {
+  id: string;
+  label: string;
+  from: string | null;
+  to: string | null;
+};
+
+export type RemeseroDetailAssignment = {
+  assignmentId: string;
+  transactionId: string;
+  senderName: string;
+  bank: string | null;
+  accountName: string | null;
+  confirmationCode: string | null;
+  transactionAmount: number;
+  amountUsd: number;
+  priceApplied: number;
+  debtAmount: number;
+  assignedAt: string;
+  unassignedAt: string | null;
+  isActive: boolean;
+};
+
+export type RemeseroDetailSummaryGroup = {
+  priceApplied: number;
+  txCount: number;
+  totalUsd: number;
+  totalCup: number;
+  amountsUsd: number[];
+};
+
+export type RemeseroDetailSummary = {
+  txCount: number;
+  totalUsd: number;
+  totalCup: number;
+  groups: RemeseroDetailSummaryGroup[];
+};
+
+export type RemeseroDetailData = {
+  remesero: Remesero;
+  payments: RemeseroPayment[];
+  rangeOptions: RemeseroDetailRangeOption[];
+  selectedRange: {
+    from: string | null;
+    to: string | null;
+  };
+  summary: RemeseroDetailSummary;
+  assignments: RemeseroDetailAssignment[];
+};
+
 export type AccountMovementType = "wire" | "expense";
 
 export type AccountBalance = {
