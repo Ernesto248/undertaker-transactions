@@ -31,6 +31,7 @@ import {
   subMonths,
   isWithinInterval,
 } from "date-fns";
+import { consumeDashboardReturnTab } from "@/lib/dashboard-tabs";
 
 interface DashboardProps {
   initialTransactions: Transaction[];
@@ -74,19 +75,18 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
   }>({ from: undefined, to: undefined });
 
   useEffect(() => {
-    const tabFromUrl = new URLSearchParams(window.location.search).get("tab");
-    if (!tabFromUrl) return;
+    const currentUrl = new URL(window.location.href);
+    const queuedTab = consumeDashboardReturnTab();
 
-    const allowedTabs = new Set([
-      "dashboard",
-      "transactions",
-      "accounts",
-      "remeseros",
-    ]);
-
-    if (allowedTabs.has(tabFromUrl)) {
-      setActiveTab(tabFromUrl);
+    if (queuedTab) {
+      setActiveTab(queuedTab);
     }
+
+    if (!currentUrl.searchParams.has("tab")) return;
+
+    currentUrl.searchParams.delete("tab");
+    const nextUrl = `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
+    window.history.replaceState(window.history.state, "", nextUrl || "/");
   }, []);
 
   const apiUrl = (path: string) => {

@@ -2,23 +2,39 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, MessageCircle, RefreshCcw } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import {
+  ArrowLeft,
+  CircleDollarSign,
+  Clock3,
+  MessageCircle,
+  ReceiptText,
+  RefreshCcw,
+  Settings2,
+  SlidersHorizontal,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import type {
   RemeseroDetailAssignment,
   RemeseroDetailData,
   RemeseroShareSummary,
 } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { queueDashboardReturnTab } from "@/lib/dashboard-tabs";
 
 type RemeseroDetailPageProps = {
   remeseroId: string;
@@ -45,16 +61,46 @@ function formatThousandsInput(value: string) {
   return digitsOnly.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
+const relativeTimeFormatter = new Intl.RelativeTimeFormat("es", {
+  numeric: "always",
+});
+
 function formatDateTime(value: string) {
-  return new Date(value).toLocaleString("es-DO", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "fecha invalida";
+
+  const diffMs = date.getTime() - Date.now();
+  const absMs = Math.abs(diffMs);
+  const minuteMs = 60 * 1000;
+  const hourMs = 60 * minuteMs;
+  const dayMs = 24 * hourMs;
+  const monthMs = 30 * dayMs;
+  const yearMs = 365 * dayMs;
+
+  if (absMs < minuteMs) {
+    return diffMs < 0 ? "hace unos segundos" : "en unos segundos";
+  }
+
+  if (absMs < hourMs) {
+    return relativeTimeFormatter.format(
+      Math.round(diffMs / minuteMs),
+      "minute",
+    );
+  }
+
+  if (absMs < dayMs) {
+    return relativeTimeFormatter.format(Math.round(diffMs / hourMs), "hour");
+  }
+
+  if (absMs < monthMs) {
+    return relativeTimeFormatter.format(Math.round(diffMs / dayMs), "day");
+  }
+
+  if (absMs < yearMs) {
+    return relativeTimeFormatter.format(Math.round(diffMs / monthMs), "month");
+  }
+
+  return relativeTimeFormatter.format(Math.round(diffMs / yearMs), "year");
 }
 
 function buildFilteredSummary(assignments: RemeseroDetailAssignment[]) {
@@ -109,11 +155,46 @@ function buildFilteredSummary(assignments: RemeseroDetailAssignment[]) {
   };
 }
 
+function SummaryMetric({
+  icon: Icon,
+  label,
+  value,
+  hint,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-border/70 bg-background/50 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            {label}
+          </p>
+          <p className="text-lg font-semibold leading-tight sm:text-xl">
+            {value}
+          </p>
+        </div>
+        <div className="rounded-xl border border-border/70 bg-background/80 p-2 text-primary">
+          <Icon className="h-4 w-4" />
+        </div>
+      </div>
+      {hint ? (
+        <p className="mt-3 text-xs text-muted-foreground">{hint}</p>
+      ) : null}
+    </div>
+  );
+}
+
 export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
   const [detail, setDetail] = useState<RemeseroDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloading, setReloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAllPayments, setShowAllPayments] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [selectedRangeId, setSelectedRangeId] = useState("current");
   const [priceFilter, setPriceFilter] = useState("all");
@@ -130,6 +211,10 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
   const [editPrecio, setEditPrecio] = useState("");
   const [savingRemesero, setSavingRemesero] = useState(false);
   const [deletingRemesero, setDeletingRemesero] = useState(false);
+
+  const queueRemeserosReturn = useCallback(() => {
+    queueDashboardReturnTab("remeseros");
+  }, []);
 
   const resolveCurrentRange = useCallback(() => {
     if (!detail)
@@ -236,6 +321,23 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
       new Set(detail.assignments.map((row) => row.priceApplied)),
     ).sort((a, b) => a - b);
   }, [detail]);
+
+  const resetFilters = useCallback(() => {
+    setPriceFilter("all");
+    setSearchQuery("");
+  }, []);
+
+  const handleSettingsOpenChange = useCallback(
+    (open: boolean) => {
+      setSettingsOpen(open);
+
+      if (!open && detail) {
+        setEditNombre(detail.remesero.nombre);
+        setEditPrecio(String(detail.remesero.precioActual));
+      }
+    },
+    [detail],
+  );
 
   const handleRangeChange = async (rangeId: string) => {
     if (!detail) return;
@@ -392,6 +494,7 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
 
       const currentRange = resolveCurrentRange();
       await loadDetail(currentRange.from, currentRange.to, false);
+      setSettingsOpen(false);
     } finally {
       setSavingRemesero(false);
     }
@@ -410,7 +513,8 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
       });
 
       if (!res.ok) return;
-      window.location.assign("/?tab=remeseros");
+      queueRemeserosReturn();
+      window.location.assign("/");
     } finally {
       setDeletingRemesero(false);
     }
@@ -467,7 +571,7 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
       <main className="min-h-screen bg-background">
         <div className="mx-auto max-w-7xl px-4 py-8 md:px-6 space-y-4">
           <Button asChild variant="outline">
-            <Link href="/?tab=remeseros">
+            <Link href="/" onClick={queueRemeserosReturn}>
               <ArrowLeft className="h-4 w-4 mr-2" /> Volver a remeseros
             </Link>
           </Button>
@@ -485,229 +589,485 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
     );
   }
 
-  const balanceType = detail.remesero.deudaActual >= 0 ? "deuda" : "fondo";
+  const isDebt = detail.remesero.deudaActual >= 0;
+  const balanceType = isDebt ? "deuda" : "fondo";
+  const balanceAccentClass = isDebt
+    ? "border-amber-500/20 bg-amber-500/10 text-amber-200"
+    : "border-emerald-500/20 bg-emerald-500/10 text-emerald-200";
+  const balanceValueClass = isDebt ? "text-amber-200" : "text-emerald-200";
+  const currentRangeOption =
+    detail.rangeOptions.find((option) => option.id === selectedRangeId) ??
+    detail.rangeOptions[0] ??
+    null;
+  const latestPayment =
+    detail.payments.find((payment) => payment.revertedAt === null) ??
+    detail.payments[0] ??
+    null;
+  const paymentsPreview = detail.payments.slice(0, 2);
+  const visiblePayments = showAllPayments ? detail.payments : paymentsPreview;
+  const activePaymentsCount = detail.payments.filter(
+    (payment) => payment.revertedAt === null,
+  ).length;
+  const revertedPaymentsCount = detail.payments.length - activePaymentsCount;
+  const hasFilters = priceFilter !== "all" || searchQuery.trim().length > 0;
+  const hiddenPaymentsCount = Math.max(
+    detail.payments.length - paymentsPreview.length,
+    0,
+  );
+  const selectClassName =
+    "h-10 w-full rounded-xl border border-input bg-background/80 px-3 text-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20";
 
   return (
     <main className="min-h-screen bg-background">
-      <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8 space-y-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <Button asChild variant="outline">
-            <Link href="/?tab=remeseros">
-              <ArrowLeft className="h-4 w-4 mr-2" /> Volver a remeseros
-            </Link>
-          </Button>
+      <Dialog open={settingsOpen} onOpenChange={handleSettingsOpenChange}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Configuracion del remesero</DialogTitle>
+            <DialogDescription>
+              Edita los datos base sin mezclar esta accion con la operacion
+              diaria del tramo.
+            </DialogDescription>
+          </DialogHeader>
 
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() =>
-                void loadDetail(
-                  detail.selectedRange.from,
-                  detail.selectedRange.to,
-                  false,
-                )
-              }
-              disabled={reloading}
-              className="w-full sm:w-auto"
-            >
-              <RefreshCcw className="h-4 w-4 mr-2" />
-              {reloading ? "Actualizando..." : "Actualizar"}
-            </Button>
-            <Button
-              type="button"
-              onClick={handleShareWhatsapp}
-              disabled={sharing}
-              className="w-full sm:w-auto"
-            >
-              <MessageCircle className="h-4 w-4 mr-2" />
-              {sharing ? "Compartiendo..." : "Compartir"}
-            </Button>
+          <div className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="edit-name">Nombre</Label>
+                <Input
+                  id="edit-name"
+                  value={editNombre}
+                  onChange={(event) => setEditNombre(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-price">Precio actual</Label>
+                <Input
+                  id="edit-price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editPrecio}
+                  onChange={(event) => setEditPrecio(event.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                onClick={handleSaveRemesero}
+                disabled={savingRemesero}
+                className="w-full sm:w-auto"
+              >
+                {savingRemesero ? "Guardando..." : "Guardar cambios"}
+              </Button>
+            </div>
+
+            <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-4">
+              <p className="text-sm font-medium text-destructive">
+                Zona delicada
+              </p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                Eliminar este remesero borra su registro principal de la
+                interfaz. Hazlo solo si ya validaste que no lo necesitas.
+              </p>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleDeleteRemesero}
+                disabled={deletingRemesero}
+                className="mt-4 w-full sm:w-auto"
+              >
+                {deletingRemesero ? "Eliminando..." : "Eliminar remesero"}
+              </Button>
+            </div>
           </div>
-        </div>
+        </DialogContent>
+      </Dialog>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base md:text-lg">
-              Resumen del remesero
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-3 md:grid-cols-3">
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-xs uppercase text-muted-foreground">Nombre</p>
-              <p className="text-base font-semibold mt-1 break-words">
-                {detail.remesero.nombre}
-              </p>
-            </div>
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-xs uppercase text-muted-foreground">
-                Precio actual
-              </p>
-              <p className="text-base font-semibold mt-1">
-                {formatLocalFlexible(detail.remesero.precioActual)}
-              </p>
-            </div>
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-xs uppercase text-muted-foreground">
-                Saldo actual
-              </p>
-              <p className="text-base font-semibold mt-1">
-                {formatLocalFlexible(Math.abs(detail.remesero.deudaActual))}{" "}
-                {balanceType}
-              </p>
-            </div>
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-xs uppercase text-muted-foreground">
-                Total USD
-              </p>
-              <p className="text-base font-semibold mt-1">
-                {formatLocalFlexible(filteredSummary.totalUsd)}
-              </p>
-            </div>
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-xs uppercase text-muted-foreground">
-                Total CUP
-              </p>
-              <p className="text-base font-semibold mt-1">
-                {formatLocal(filteredSummary.totalCup)}
-              </p>
-            </div>
-            <div className="rounded-lg border border-border p-3">
-              <p className="text-xs uppercase text-muted-foreground">
-                Asignaciones
-              </p>
-              <p className="text-base font-semibold mt-1">
-                {filteredSummary.txCount}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8 space-y-6">
+        <section className="overflow-hidden rounded-3xl border border-border/80 bg-card/95 shadow-sm">
+          <div className="border-b border-border/70 px-4 py-4 md:px-6">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="space-y-3">
+                <Button
+                  asChild
+                  variant="ghost"
+                  className="w-fit px-0 text-muted-foreground hover:bg-transparent hover:text-foreground"
+                >
+                  <Link href="/" onClick={queueRemeserosReturn}>
+                    <ArrowLeft className="h-4 w-4" /> Volver a remeseros
+                  </Link>
+                </Button>
 
-        <Accordion
-          type="multiple"
-          defaultValue={["payments", "filters", "assignments"]}
-          className="space-y-4"
-        >
-          <AccordionItem value="payments" className="border-none">
-            <Card>
-              <CardHeader className="pb-2">
-                <AccordionTrigger className="py-0 hover:no-underline">
-                  <CardTitle className="text-base md:text-lg">
-                    Historial de pagos
-                  </CardTitle>
-                </AccordionTrigger>
-              </CardHeader>
-              <AccordionContent>
-                <CardContent className="space-y-4 pt-0">
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="new-payment">Registrar pago</Label>
-                      <Input
-                        id="new-payment"
-                        inputMode="numeric"
-                        value={paymentAmount}
-                        onChange={(event) =>
-                          setPaymentAmount(
-                            formatThousandsInput(event.target.value),
-                          )
-                        }
-                        placeholder="1,000"
-                      />
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 flex-wrap items-center gap-3">
+                      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
+                        {detail.remesero.nombre}
+                      </h1>
+                      <Badge
+                        className={cn(
+                          "border px-3 py-1 text-xs font-medium uppercase tracking-[0.16em]",
+                          balanceAccentClass,
+                        )}
+                      >
+                        {isDebt ? "Con deuda" : "Con fondo"}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className="border-border/70 bg-background/60 px-3 py-1 text-xs uppercase tracking-[0.16em] text-muted-foreground"
+                      >
+                        Precio{" "}
+                        {formatLocalFlexible(detail.remesero.precioActual)}
+                      </Badge>
                     </div>
-                    <div className="space-y-2 md:col-span-2">
-                      <Label htmlFor="new-note">Nota</Label>
-                      <Input
-                        id="new-note"
-                        value={paymentNote}
-                        onChange={(event) => setPaymentNote(event.target.value)}
-                        placeholder="Transferencia"
-                      />
-                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="shrink-0 rounded-full"
+                      onClick={() => setSettingsOpen(true)}
+                      aria-label="Abrir configuracion del remesero"
+                      title="Configuracion del remesero"
+                    >
+                      <Settings2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <Button
-                    type="button"
-                    onClick={handleCreatePayment}
-                    disabled={creatingPayment}
-                    className="w-full sm:w-auto"
-                  >
-                    {creatingPayment ? "Registrando..." : "Registrar pago"}
-                  </Button>
 
+                  <p className="max-w-3xl text-sm leading-6 text-muted-foreground md:text-base">
+                    Vista operativa del remesero para controlar saldo, tramo
+                    activo y cortes sin perder contexto en móvil o desktop.
+                  </p>
+
+                  <div className="rounded-2xl border border-border/70 bg-background/50 px-4 py-3 text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                      Tramo activo:
+                    </span>{" "}
+                    {currentRangeOption?.label ?? "Sin tramo disponible"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex w-full flex-row gap-2 sm:w-auto">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    void loadDetail(
+                      detail.selectedRange.from,
+                      detail.selectedRange.to,
+                      false,
+                    )
+                  }
+                  disabled={reloading}
+                  className="flex-1 sm:flex-none"
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                  {reloading ? "Actualizando..." : "Actualizar"}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleShareWhatsapp}
+                  disabled={sharing}
+                  className="flex-1 sm:flex-none"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  {sharing ? "Compartiendo..." : "Compartir"}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 px-4 py-5 md:px-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.85fr)]">
+            <div className="space-y-4">
+              <div className="rounded-3xl border border-border/70 bg-background/55 p-5 md:p-6">
+                <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground">
+                  Saldo actual
+                </p>
+                <div className="mt-4 flex flex-wrap items-end gap-3">
+                  <p
+                    className={cn(
+                      "text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl",
+                      balanceValueClass,
+                    )}
+                  >
+                    {formatLocalFlexible(Math.abs(detail.remesero.deudaActual))}
+                  </p>
+                  <Badge
+                    className={cn(
+                      "border px-3 py-1 text-xs uppercase tracking-[0.16em]",
+                      balanceAccentClass,
+                    )}
+                  >
+                    {balanceType}
+                  </Badge>
+                </div>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+                  {isDebt
+                    ? "Este es el monto pendiente que el remesero mantiene frente al negocio."
+                    : "Este monto representa saldo a favor disponible para próximos movimientos."}
+                </p>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <SummaryMetric
+                  icon={CircleDollarSign}
+                  label="Total tramo"
+                  value={formatLocal(detail.summary.totalCup)}
+                  hint="CUP acumulado del tramo activo"
+                />
+                <SummaryMetric
+                  icon={TrendingUp}
+                  label="USD tramo"
+                  value={formatLocalFlexible(detail.summary.totalUsd)}
+                  hint="Monto total en USD del corte"
+                />
+                <SummaryMetric
+                  icon={ReceiptText}
+                  label="Asignaciones"
+                  value={String(detail.summary.txCount)}
+                  hint="Operaciones registradas en el tramo"
+                />
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-border/70 bg-background/55 p-5 md:p-6">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Clock3 className="h-4 w-4" />
+                Contexto operativo
+              </div>
+
+              <div className="mt-5 space-y-4">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                    Ultimo pago valido
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold tracking-tight">
+                    {latestPayment
+                      ? `$ ${formatLocalFlexible(latestPayment.amountPaid)}`
+                      : "Sin pagos"}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {latestPayment
+                      ? formatDateTime(latestPayment.paidAt)
+                      : "Aun no se ha registrado un corte para este remesero."}
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+                  <div className="rounded-2xl border border-border/70 bg-background/60 p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                      Pagos activos
+                    </p>
+                    <p className="mt-2 text-xl font-semibold">
+                      {activePaymentsCount}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-border/70 bg-background/60 p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                      Reversiones
+                    </p>
+                    <p className="mt-2 text-xl font-semibold">
+                      {revertedPaymentsCount}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-border/70 bg-background/60 p-4 text-sm text-muted-foreground">
+                  Ultima actualizacion del remesero:{" "}
+                  {formatDateTime(detail.remesero.updatedAt)}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+          <section className="space-y-6">
+            <Card className="border-border/80 bg-card/95">
+              <CardHeader className="space-y-2 px-4 py-5 md:px-6">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Wallet className="h-4 w-4" />
+                  Nuevo corte
+                </div>
+                <CardTitle className="text-xl">Registrar pago</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Coloca el corte antes de revisar el tramo para que la
+                  operacion siga el orden natural del flujo.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4 px-4 pb-5 md:px-6 md:pb-6">
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
                   <div className="space-y-2">
-                    {detail.payments.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        Sin pagos registrados.
-                      </p>
-                    ) : (
-                      detail.payments.map((payment) => (
-                        <div
-                          key={payment.id}
-                          className="rounded-md border border-border p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-                        >
-                          <div>
+                    <Label htmlFor="new-payment">Monto pagado</Label>
+                    <Input
+                      id="new-payment"
+                      inputMode="numeric"
+                      value={paymentAmount}
+                      onChange={(event) =>
+                        setPaymentAmount(
+                          formatThousandsInput(event.target.value),
+                        )
+                      }
+                      placeholder="1,000"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="new-note">Nota</Label>
+                    <Input
+                      id="new-note"
+                      value={paymentNote}
+                      onChange={(event) => setPaymentNote(event.target.value)}
+                      placeholder="Transferencia"
+                    />
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  onClick={handleCreatePayment}
+                  disabled={creatingPayment}
+                  className="w-full sm:w-auto"
+                >
+                  {creatingPayment ? "Registrando..." : "Registrar pago"}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/80 bg-card/95">
+              <CardHeader className="space-y-2 px-4 py-5 md:px-6">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Clock3 className="h-4 w-4" />
+                  Historial de pagos
+                </div>
+                <CardTitle className="text-xl">Ultimos pagos</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Mostramos primero los ultimos 2 pagos para no alargar la
+                  pantalla; puedes expandir el resto cuando lo necesites.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-3 px-4 pb-5 md:px-6 md:pb-6">
+                {detail.payments.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border/80 bg-background/40 px-4 py-10 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      Sin pagos registrados.
+                    </p>
+                  </div>
+                ) : (
+                  visiblePayments.map((payment) => (
+                    <div
+                      key={payment.id}
+                      className="rounded-2xl border border-border/70 bg-background/45 p-4"
+                    >
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <p
-                              className={
-                                payment.revertedAt
-                                  ? "font-medium line-through text-muted-foreground"
-                                  : "font-medium"
-                              }
+                              className={cn(
+                                "text-base font-semibold",
+                                payment.revertedAt &&
+                                  "line-through text-muted-foreground",
+                              )}
                             >
                               $ {formatLocalFlexible(payment.amountPaid)}
                             </p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatDateTime(payment.paidAt)}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {payment.note ?? "Sin nota"}
-                            </p>
-                            {payment.revertedAt && (
-                              <p className="text-xs text-destructive">
-                                Revertido: {formatDateTime(payment.revertedAt)}
-                              </p>
-                            )}
-                          </div>
-                          {!payment.revertedAt && (
-                            <Button
-                              type="button"
+                            <Badge
                               variant="outline"
-                              size="sm"
-                              className="w-full sm:w-auto"
-                              onClick={() =>
-                                void handleRevertPayment(payment.id)
-                              }
-                              disabled={revertingById[payment.id] === true}
+                              className={cn(
+                                "border px-2.5 py-0.5 text-[11px] uppercase tracking-[0.16em]",
+                                payment.revertedAt
+                                  ? "border-destructive/30 bg-destructive/10 text-destructive"
+                                  : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
+                              )}
                             >
-                              {revertingById[payment.id]
-                                ? "Revirtiendo..."
-                                : "Revertir"}
-                            </Button>
-                          )}
+                              {payment.revertedAt ? "Revertido" : "Aplicado"}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDateTime(payment.paidAt)}
+                          </p>
+                          <p className="break-words text-sm text-muted-foreground">
+                            {payment.note ?? "Sin nota"}
+                          </p>
+                          {payment.revertedAt ? (
+                            <p className="text-xs text-destructive">
+                              Revertido: {formatDateTime(payment.revertedAt)}
+                            </p>
+                          ) : null}
                         </div>
-                      ))
-                    )}
-                  </div>
-                </CardContent>
-              </AccordionContent>
-            </Card>
-          </AccordionItem>
 
-          <AccordionItem value="filters" className="border-none">
-            <Card>
-              <CardHeader className="pb-2">
-                <AccordionTrigger className="py-0 hover:no-underline">
-                  <CardTitle className="text-base md:text-lg">
-                    Tramo y filtros
-                  </CardTitle>
-                </AccordionTrigger>
+                        {!payment.revertedAt ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-full sm:w-auto"
+                            onClick={() => void handleRevertPayment(payment.id)}
+                            disabled={revertingById[payment.id] === true}
+                          >
+                            {revertingById[payment.id]
+                              ? "Revirtiendo..."
+                              : "Revertir"}
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))
+                )}
+
+                {!showAllPayments && hiddenPaymentsCount > 0 ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    onClick={() => setShowAllPayments(true)}
+                  >
+                    Ver mas
+                  </Button>
+                ) : null}
+              </CardContent>
+            </Card>
+
+            <Card className="overflow-hidden border-border/80 bg-card/95">
+              <CardHeader className="border-b border-border/70 px-4 py-5 md:px-6">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <SlidersHorizontal className="h-4 w-4" />
+                      Actividad del tramo
+                    </div>
+                    <CardTitle className="text-xl">
+                      Asignaciones visibles
+                    </CardTitle>
+                    <p className="max-w-2xl text-sm text-muted-foreground">
+                      {hasFilters
+                        ? `Mostrando ${filteredSummary.txCount} de ${detail.summary.txCount} asignaciones del tramo seleccionado.`
+                        : "Filtros y resultados integrados en una sola zona para reducir scroll y cambios de contexto."}
+                    </p>
+                  </div>
+
+                  {hasFilters ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={resetFilters}
+                      className="w-full sm:w-auto"
+                    >
+                      Limpiar filtros
+                    </Button>
+                  ) : null}
+                </div>
               </CardHeader>
-              <AccordionContent>
-                <CardContent className="grid gap-3 md:grid-cols-3 pt-0">
+
+              <CardContent className="space-y-5 px-4 py-5 md:px-6 md:py-6">
+                <div className="grid gap-3 xl:grid-cols-[minmax(250px,1.1fr)_minmax(180px,0.65fr)_minmax(240px,1fr)]">
                   <div className="space-y-2">
                     <Label htmlFor="range">Tramo entre pagos</Label>
                     <select
                       id="range"
                       title="Tramo entre pagos"
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      className={selectClassName}
                       value={selectedRangeId}
                       onChange={(event) =>
                         void handleRangeChange(event.target.value)
@@ -720,12 +1080,13 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
                       ))}
                     </select>
                   </div>
+
                   <div className="space-y-2">
-                    <Label htmlFor="price-filter">Filtrar por precio</Label>
+                    <Label htmlFor="price-filter">Precio aplicado</Label>
                     <select
                       id="price-filter"
                       title="Filtrar por precio"
-                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      className={selectClassName}
                       value={priceFilter}
                       onChange={(event) => setPriceFilter(event.target.value)}
                     >
@@ -737,8 +1098,9 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
                       ))}
                     </select>
                   </div>
+
                   <div className="space-y-2">
-                    <Label htmlFor="search">Buscar</Label>
+                    <Label htmlFor="search">Buscar remitente o codigo</Label>
                     <Input
                       id="search"
                       placeholder="Nombre o codigo"
@@ -746,161 +1108,190 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
                       onChange={(event) => setSearchQuery(event.target.value)}
                     />
                   </div>
-                </CardContent>
-              </AccordionContent>
-            </Card>
-          </AccordionItem>
+                </div>
 
-          <AccordionItem value="assignments" className="border-none">
-            <Card>
-              <CardHeader className="pb-2">
-                <AccordionTrigger className="py-0 hover:no-underline">
-                  <CardTitle className="text-base md:text-lg">
-                    Transacciones asignadas del tramo
-                  </CardTitle>
-                </AccordionTrigger>
-              </CardHeader>
-              <AccordionContent>
-                <CardContent className="space-y-2 pt-0">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <SummaryMetric
+                    icon={TrendingUp}
+                    label="USD visibles"
+                    value={formatLocalFlexible(filteredSummary.totalUsd)}
+                    hint={
+                      hasFilters
+                        ? "Resultados segun filtros activos"
+                        : "Monto visible en la lista actual"
+                    }
+                  />
+                  <SummaryMetric
+                    icon={Wallet}
+                    label="CUP visibles"
+                    value={formatLocal(filteredSummary.totalCup)}
+                    hint={
+                      hasFilters
+                        ? "Resumen filtrado para este tramo"
+                        : "Balance visible en la lista actual"
+                    }
+                  />
+                  <SummaryMetric
+                    icon={ReceiptText}
+                    label="Operaciones"
+                    value={String(filteredSummary.txCount)}
+                    hint={
+                      hasFilters
+                        ? "Coincidencias despues del filtro"
+                        : "Asignaciones visibles"
+                    }
+                  />
+                </div>
+
+                <div className="space-y-3">
                   {filteredAssignments.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No hay transacciones para este filtro.
-                    </p>
+                    <div className="rounded-2xl border border-dashed border-border/80 bg-background/40 px-4 py-10 text-center">
+                      <p className="text-sm font-medium text-foreground">
+                        No hay transacciones para este filtro.
+                      </p>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Cambia el tramo o limpia los filtros para volver a ver
+                        actividad.
+                      </p>
+                    </div>
                   ) : (
                     filteredAssignments.map((row) => (
                       <div
                         key={row.assignmentId}
-                        className="rounded-md border border-border p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+                        className="rounded-2xl border border-border/70 bg-background/45 p-4"
                       >
-                        <div>
-                          <p className="font-medium break-words">
-                            {row.senderName}
-                          </p>
-                          <p className="text-xs text-muted-foreground break-words">
-                            {row.confirmationCode ?? "Sin codigo"} ·{" "}
-                            {row.bank ?? "Sin banco"} ·{" "}
-                            {row.accountName ?? "Sin cuenta"}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Asignada: {formatDateTime(row.assignedAt)}
-                          </p>
-                        </div>
-                        <div className="text-left sm:text-right">
-                          <p className="font-semibold">
-                            USD {formatLocalFlexible(row.amountUsd)}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatLocalFlexible(row.priceApplied)} x{" "}
-                            {formatLocalFlexible(row.amountUsd)} ={" "}
-                            {formatLocal(row.debtAmount)}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {row.isActive ? "Activa" : "Desasignada"}
-                          </p>
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="min-w-0 space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-base font-semibold break-words">
+                                {row.senderName}
+                              </p>
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "border px-2.5 py-0.5 text-[11px] uppercase tracking-[0.16em]",
+                                  row.isActive
+                                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                                    : "border-border/70 bg-background/70 text-muted-foreground",
+                                )}
+                              >
+                                {row.isActive ? "Activa" : "Desasignada"}
+                              </Badge>
+                            </div>
+
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                              <span>
+                                {row.confirmationCode ?? "Sin codigo"}
+                              </span>
+                              <span>{row.bank ?? "Sin banco"}</span>
+                              <span>{row.accountName ?? "Sin cuenta"}</span>
+                            </div>
+
+                            <p className="text-xs text-muted-foreground">
+                              Asignada: {formatDateTime(row.assignedAt)}
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2 md:min-w-[280px]">
+                            <div className="rounded-xl border border-border/60 bg-background/70 p-3 text-center">
+                              <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                USD
+                              </p>
+                              <p className="mt-1 text-sm font-semibold">
+                                {formatLocalFlexible(row.amountUsd)}
+                              </p>
+                            </div>
+                            <div className="rounded-xl border border-border/60 bg-background/70 p-3 text-center">
+                              <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                Precio
+                              </p>
+                              <p className="mt-1 text-sm font-semibold">
+                                {formatLocalFlexible(row.priceApplied)}
+                              </p>
+                            </div>
+                            <div className="rounded-xl border border-border/60 bg-background/70 p-3 text-center">
+                              <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                Total
+                              </p>
+                              <p className="mt-1 text-sm font-semibold">
+                                {formatLocal(row.debtAmount)}
+                              </p>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))
                   )}
-                </CardContent>
-              </AccordionContent>
+                </div>
+              </CardContent>
             </Card>
-          </AccordionItem>
+          </section>
 
-          <AccordionItem value="price-summary" className="border-none">
-            <Card>
-              <CardHeader className="pb-2">
-                <AccordionTrigger className="py-0 hover:no-underline">
-                  <CardTitle className="text-base md:text-lg">
-                    Resumen por precio
-                  </CardTitle>
-                </AccordionTrigger>
+          <aside className="space-y-6 xl:sticky xl:top-6">
+            <Card className="border-border/80 bg-card/95">
+              <CardHeader className="space-y-2 px-4 py-5 md:px-5">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <TrendingUp className="h-4 w-4" />
+                  {hasFilters ? "Resumen filtrado" : "Resumen por precio"}
+                </div>
+                <CardTitle className="text-lg">
+                  Lectura rapida del tramo
+                </CardTitle>
               </CardHeader>
-              <AccordionContent>
-                <CardContent className="space-y-2 pt-0">
-                  {filteredSummary.groups.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      Sin asignaciones en este tramo.
-                    </p>
-                  ) : (
-                    filteredSummary.groups.map((group) => (
-                      <div
-                        key={group.priceApplied}
-                        className="rounded-md border border-border p-3 text-sm"
-                      >
-                        <p className="font-medium">
-                          {formatLocalFlexible(group.priceApplied)} (
-                          {group.amountsUsd
-                            .map((amount) => formatLocalFlexible(amount))
-                            .join(", ")}
-                          )
-                        </p>
-                        <p className="text-muted-foreground mt-1">
-                          {group.txCount} transacciones ·{" "}
-                          {formatLocalFlexible(group.totalUsd)} USD ·{" "}
-                          {formatLocal(group.totalCup)} CUP
-                        </p>
+              <CardContent className="space-y-3 px-4 pb-5 md:px-5 md:pb-5">
+                {filteredSummary.groups.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Sin asignaciones en este tramo.
+                  </p>
+                ) : (
+                  filteredSummary.groups.map((group) => (
+                    <div
+                      key={group.priceApplied}
+                      className="rounded-2xl border border-border/70 bg-background/45 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium">
+                            Precio {formatLocalFlexible(group.priceApplied)}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {group.amountsUsd
+                              .map((amount) => formatLocalFlexible(amount))
+                              .join(", ")}
+                          </p>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className="border-border/70 bg-background/70 text-[11px] uppercase tracking-[0.16em] text-muted-foreground"
+                        >
+                          {group.txCount} ops
+                        </Badge>
                       </div>
-                    ))
-                  )}
-                </CardContent>
-              </AccordionContent>
+                      <div className="mt-3 grid grid-cols-1 gap-2 text-sm min-[420px]:grid-cols-2">
+                        <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                          <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            USD
+                          </p>
+                          <p className="mt-1 font-semibold">
+                            {formatLocalFlexible(group.totalUsd)}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                          <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            CUP
+                          </p>
+                          <p className="mt-1 font-semibold">
+                            {formatLocal(group.totalCup)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
             </Card>
-          </AccordionItem>
-
-          <AccordionItem value="settings" className="border-none">
-            <Card>
-              <CardHeader className="pb-2">
-                <AccordionTrigger className="py-0 hover:no-underline">
-                  <CardTitle className="text-base md:text-lg">
-                    Configuracion del remesero
-                  </CardTitle>
-                </AccordionTrigger>
-              </CardHeader>
-              <AccordionContent>
-                <CardContent className="grid gap-3 md:grid-cols-3 pt-0">
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-name">Nombre</Label>
-                    <Input
-                      id="edit-name"
-                      value={editNombre}
-                      onChange={(event) => setEditNombre(event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-price">Precio actual</Label>
-                    <Input
-                      id="edit-price"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={editPrecio}
-                      onChange={(event) => setEditPrecio(event.target.value)}
-                    />
-                  </div>
-                  <div className="flex flex-col sm:flex-row md:flex-col lg:flex-row items-stretch md:items-end gap-2">
-                    <Button
-                      type="button"
-                      onClick={handleSaveRemesero}
-                      disabled={savingRemesero}
-                      className="w-full sm:w-auto"
-                    >
-                      {savingRemesero ? "Guardando..." : "Guardar"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      onClick={handleDeleteRemesero}
-                      disabled={deletingRemesero}
-                      className="w-full sm:w-auto"
-                    >
-                      {deletingRemesero ? "Eliminando..." : "Eliminar"}
-                    </Button>
-                  </div>
-                </CardContent>
-              </AccordionContent>
-            </Card>
-          </AccordionItem>
-        </Accordion>
+          </aside>
+        </div>
       </div>
     </main>
   );

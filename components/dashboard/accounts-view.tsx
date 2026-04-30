@@ -61,12 +61,14 @@ export function AccountsView({
     >
   >({});
 
+  const allowedAccountNames = new Set(["tekfer", "tefker"]);
+
   const visibleAccounts = useMemo(() => {
     return accounts.filter((account) => {
       const normalized = account.accountName.toLowerCase().trim();
-      return !normalized.startsWith("vigo capital");
+      return allowedAccountNames.has(normalized);
     });
-  }, [accounts]);
+  }, [accounts, allowedAccountNames]);
 
   const totals = useMemo(() => {
     const totalBalance = visibleAccounts.reduce(
