@@ -88,9 +88,12 @@ export async function GET(request: Request) {
       SELECT
         g.id,
         g.account_name as "accountName",
-        COALESCE(tx.total_incoming, 0) as "incomingTotal",
-        COALESCE(m.total_outgoing, 0) as "outgoingTotal",
-        (COALESCE(tx.total_incoming, 0) - COALESCE(m.total_outgoing, 0)) as "balance",
+        (COALESCE(tx.total_incoming, 0) + COALESCE(g.incoming_adjustment, 0)) as "incomingTotal",
+        (COALESCE(m.total_outgoing, 0) + COALESCE(g.outgoing_adjustment, 0)) as "outgoingTotal",
+        (
+          (COALESCE(tx.total_incoming, 0) + COALESCE(g.incoming_adjustment, 0))
+          - (COALESCE(m.total_outgoing, 0) + COALESCE(g.outgoing_adjustment, 0))
+        ) as "balance",
         COALESCE(tx.transaction_count, 0) as "transactionCount",
         tx.last_transaction_at as "lastTransactionAt"
       FROM gmail_accounts g
