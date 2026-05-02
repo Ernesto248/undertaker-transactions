@@ -61,30 +61,21 @@ export function AccountsView({
     >
   >({});
 
-  const allowedAccountNames = new Set(["tekfer", "tefker"]);
-
-  const visibleAccounts = useMemo(() => {
-    return accounts.filter((account) => {
-      const normalized = account.accountName.toLowerCase().trim();
-      return allowedAccountNames.has(normalized);
-    });
-  }, [accounts, allowedAccountNames]);
-
   const totals = useMemo(() => {
-    const totalBalance = visibleAccounts.reduce(
+    const totalBalance = accounts.reduce(
       (sum, account) => sum + account.balance,
       0,
     );
-    const totalIncoming = visibleAccounts.reduce(
+    const totalIncoming = accounts.reduce(
       (sum, account) => sum + account.incomingTotal,
       0,
     );
-    const totalOutgoing = visibleAccounts.reduce(
+    const totalOutgoing = accounts.reduce(
       (sum, account) => sum + account.outgoingTotal,
       0,
     );
     return { totalBalance, totalIncoming, totalOutgoing };
-  }, [visibleAccounts]);
+  }, [accounts]);
 
   const formatLocal = (amount: number) => {
     return new Intl.NumberFormat("es-DO", {
@@ -167,7 +158,7 @@ export function AccountsView({
             Cuentas
           </h2>
           <p className="text-sm text-muted-foreground">
-            {visibleAccounts.length} cuentas · Saldo total:{" "}
+            {accounts.length} cuentas · Saldo total:{" "}
             {formatLocal(totals.totalBalance)}
           </p>
         </div>
@@ -221,7 +212,7 @@ export function AccountsView({
       </div>
 
       <div className="grid gap-4">
-        {visibleAccounts.map((account) => {
+        {accounts.map((account) => {
           const isExpanded = expandedById[account.id] === true;
           const draft = getDraft(account.id);
           const movements = movementsByAccount[account.id] ?? [];
@@ -448,7 +439,7 @@ export function AccountsView({
           );
         })}
 
-        {visibleAccounts.length === 0 && (
+        {accounts.length === 0 && (
           <Card className="border-border/70 bg-card/60">
             <CardContent className="py-10 text-center">
               <p className="text-muted-foreground">
