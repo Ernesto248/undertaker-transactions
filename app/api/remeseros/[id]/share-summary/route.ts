@@ -86,15 +86,48 @@ export async function GET(
     const groups = groupsResult.rows.map((row: any) => ({
       priceApplied: toNumber(row.priceApplied),
       amountsUsd: Array.isArray(row.amountsUsd)
-        ? row.amountsUsd.map((value) => toNumber(value))
+        ? row.amountsUsd.map((value: any) => toNumber(value))
         : [],
       txCount: toNumber(row.txCount),
       totalUsd: toNumber(row.totalUsd),
       totalCup: toNumber(row.totalCup),
     }));
 
-    const totalTiradoUsd = groups.reduce((acc, row) => acc + row.totalUsd, 0);
-    const totalTiradoCup = groups.reduce((acc, row) => acc + row.totalCup, 0);
+    const removedGroupsResult = await client.query(
+      `
+      SELECT
+        price_applied as "priceApplied",
+        ARRAY_AGG(amount_usd ORDER BY unassigned_at) as "amountsUsd",
+        COUNT(*)::int as "txCount",
+        COALESCE(SUM(amount_usd), 0) as "totalUsd",
+        COALESCE(SUM(debt_amount), 0) as "totalCup"
+      FROM remesero_transaction_assignments
+      WHERE remesero_id = $1
+        AND assigned_at <= $2::timestamptz
+        AND unassigned_at > $2::timestamptz
+      GROUP BY price_applied
+      ORDER BY price_applied
+      `,
+      [id, cutAt],
+    );
+
+    const removedGroups = removedGroupsResult.rows.map((row: any) => ({
+      priceApplied: toNumber(row.priceApplied),
+      amountsUsd: Array.isArray(row.amountsUsd)
+        ? row.amountsUsd.map((value: any) => toNumber(value))
+        : [],
+      txCount: toNumber(row.txCount),
+      totalUsd: toNumber(row.totalUsd),
+      totalCup: toNumber(row.totalCup),
+    }));
+
+    const addedTiradoUsd = groups.reduce((acc, row) => acc + row.totalUsd, 0);
+    const addedTiradoCup = groups.reduce((acc, row) => acc + row.totalCup, 0);
+    const removedUsd = removedGroups.reduce((acc, row) => acc + row.totalUsd, 0);
+    const removedCup = removedGroups.reduce((acc, row) => acc + row.totalCup, 0);
+
+    const totalTiradoUsd = addedTiradoUsd - removedUsd;
+    const totalTiradoCup = addedTiradoCup - removedCup;
 
     let inicioDebt = toNumber(lastPayment?.debtAfterPayment);
 
@@ -125,6 +158,7 @@ export async function GET(
       finalDebt,
       finalDebtType: finalDebt >= 0 ? "DEUDA" : "FONDO",
       groups,
+      removedGroups,
     };
 
     return Response.json({ ok: true, summary }, { status: 200 });

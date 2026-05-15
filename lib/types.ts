@@ -65,6 +65,7 @@ export type RemeseroShareSummary = {
   finalDebt: number;
   finalDebtType: "DEUDA" | "FONDO";
   groups: RemeseroShareSummaryGroup[];
+  removedGroups: RemeseroShareSummaryGroup[];
 };
 
 export type RemeseroDetailRangeOption = {
