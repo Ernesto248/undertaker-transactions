@@ -39,6 +39,11 @@ export function CreateRemeseroPaymentDialog({
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [zeroOut, setZeroOut] = useState(false);
+  const [submitState, setSubmitState] = useState<
+    | { kind: "idle" }
+    | { kind: "submitting" }
+    | { kind: "error"; message: string }
+  >({ kind: "idle" });
   useEffect(() => {
     if (zeroOut && remesero.deudaActual > 0) {
       setAmount(String(remesero.deudaActual));
@@ -46,6 +51,44 @@ export function CreateRemeseroPaymentDialog({
       setAmount("");
     }
   }, [zeroOut, remesero.deudaActual]);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const parsed = Number(amount);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setSubmitState({ kind: "error", message: "El monto debe ser mayor a 0" });
+      return;
+    }
+
+    setSubmitState({ kind: "submitting" });
+
+    const body: Record<string, unknown> = { amountPaid: parsed };
+    if (note.trim()) body.note = note.trim();
+
+    try {
+      const res = await fetch(`/api/remeseros/${remesero.id}/payments`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean };
+      if (!res.ok || !data.ok) {
+        setSubmitState({
+          kind: "error",
+          message: "No se pudo registrar el pago",
+        });
+        return;
+      }
+      await onCreated();
+      onOpenChange(false);
+    } catch {
+      setSubmitState({
+        kind: "error",
+        message: "No se pudo registrar el pago",
+      });
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -58,7 +101,7 @@ export function CreateRemeseroPaymentDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="payment-amount">Monto a pagar</Label>
             <Input
@@ -102,17 +145,26 @@ export function CreateRemeseroPaymentDialog({
             </div>
           ) : null}
 
+          {submitState.kind === "error" ? (
+            <p className="text-sm text-destructive">{submitState.message}</p>
+          ) : null}
+
           <div className="flex justify-end gap-2">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
+              disabled={submitState.kind === "submitting"}
             >
               Cancelar
             </Button>
-            <Button type="submit">Registrar pago</Button>
+            <Button type="submit" disabled={submitState.kind === "submitting"}>
+              {submitState.kind === "submitting"
+                ? "Registrando..."
+                : "Registrar pago"}
+            </Button>
           </div>
-        </div>
+        </form>
       </DialogContent>
     </Dialog>
   );

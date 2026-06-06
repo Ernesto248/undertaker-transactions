@@ -109,4 +109,44 @@ describe("CreateRemeseroPaymentDialog", () => {
     expect(amountInput.value).toBe("");
     expect(amountInput.readOnly).toBe(false);
   });
+
+  it("submits the payment with the entered amount and calls onCreated on success", async () => {
+    const onCreated = vi.fn();
+    const fetchMock = vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, payment: { id: "p-1" } }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const onOpenChange = vi.fn();
+    render(
+      <CreateRemeseroPaymentDialog
+        open={true}
+        onOpenChange={onOpenChange}
+        remesero={baseRemesero}
+        onCreated={onCreated}
+      />,
+    );
+
+    const amountInput = screen.getByLabelText(/monto a pagar/i);
+    const noteInput = screen.getByLabelText(/nota/i);
+    fireEvent.change(amountInput, { target: { value: "500" } });
+    fireEvent.change(noteInput, { target: { value: "transfer" } });
+
+    const submitButton = screen.getByRole("button", { name: /registrar pago/i });
+    fireEvent.click(submitButton);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/remeseros/r-1/payments",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ amountPaid: 500, note: "transfer" }),
+      }),
+    );
+    expect(onCreated).toHaveBeenCalled();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
 });
