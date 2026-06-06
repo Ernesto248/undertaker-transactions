@@ -1,0 +1,41 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { CreateRemeseroPaymentDialog } from "@/components/dashboard/create-remesero-payment-dialog";
+import type { Remesero } from "@/lib/types";
+
+const baseRemesero: Remesero = {
+  id: "r-1",
+  nombre: "Osmel",
+  precioActual: 615,
+  deudaActual: 1360422,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-04-13T00:00:00.000Z",
+};
+
+describe("CreateRemeseroPaymentDialog", () => {
+  beforeEach(() => {
+    vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, payment: {} }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("renders the remesero name and current debt in the header", () => {
+    render(
+      <CreateRemeseroPaymentDialog
+        open={true}
+        onOpenChange={() => {}}
+        remesero={baseRemesero}
+        onCreated={() => {}}
+      />,
+    );
+    expect(screen.getByText("Osmel")).toBeDefined();
+    expect(screen.getByText(/1,360,422/)).toBeDefined();
+  });
+});
