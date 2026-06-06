@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { CreateRemeseroPaymentDialog } from "@/components/dashboard/create-remesero-payment-dialog";
 import type { Remesero } from "@/lib/types";
 
@@ -75,5 +75,38 @@ describe("CreateRemeseroPaymentDialog", () => {
       />,
     );
     expect(screen.queryByRole("switch", { name: /dejar en 0/i })).toBeNull();
+  });
+
+  it("fills amount and locks the input when 'Dejar en 0' is toggled on", () => {
+    render(
+      <CreateRemeseroPaymentDialog
+        open={true}
+        onOpenChange={() => {}}
+        remesero={baseRemesero}
+        onCreated={() => {}}
+      />,
+    );
+    const toggle = screen.getByRole("switch", { name: /dejar en 0/i });
+    fireEvent.click(toggle);
+    const amountInput = screen.getByLabelText(/monto a pagar/i) as HTMLInputElement;
+    expect(amountInput.value).toBe("1360422");
+    expect(amountInput.readOnly).toBe(true);
+  });
+
+  it("clears amount and unlocks the input when 'Dejar en 0' is toggled off", () => {
+    render(
+      <CreateRemeseroPaymentDialog
+        open={true}
+        onOpenChange={() => {}}
+        remesero={baseRemesero}
+        onCreated={() => {}}
+      />,
+    );
+    const toggle = screen.getByRole("switch", { name: /dejar en 0/i });
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+    const amountInput = screen.getByLabelText(/monto a pagar/i) as HTMLInputElement;
+    expect(amountInput.value).toBe("");
+    expect(amountInput.readOnly).toBe(false);
   });
 });

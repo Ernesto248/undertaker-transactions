@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -39,6 +39,13 @@ export function CreateRemeseroPaymentDialog({
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [zeroOut, setZeroOut] = useState(false);
+  useEffect(() => {
+    if (zeroOut && remesero.deudaActual > 0) {
+      setAmount(String(remesero.deudaActual));
+    } else {
+      setAmount("");
+    }
+  }, [zeroOut, remesero.deudaActual]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -62,6 +69,7 @@ export function CreateRemeseroPaymentDialog({
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
               placeholder="0.00"
+              readOnly={zeroOut}
             />
           </div>
 
