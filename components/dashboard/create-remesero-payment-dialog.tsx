@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import type { Remesero } from "@/lib/types";
 
 type CreateRemeseroPaymentDialogProps = {
@@ -37,6 +38,7 @@ export function CreateRemeseroPaymentDialog({
 }: CreateRemeseroPaymentDialogProps) {
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
+  const [zeroOut, setZeroOut] = useState(false);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -73,6 +75,24 @@ export function CreateRemeseroPaymentDialog({
               maxLength={500}
             />
           </div>
+
+          {remesero.deudaActual > 0 ? (
+            <div className="flex items-center justify-between rounded-lg border border-border bg-secondary/30 px-3 py-2">
+              <div className="space-y-0.5">
+                <Label htmlFor="zero-out" className="text-sm font-medium">
+                  Dejar en 0
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Liquidar la deuda completa
+                </p>
+              </div>
+              <Switch
+                id="zero-out"
+                checked={zeroOut}
+                onCheckedChange={setZeroOut}
+              />
+            </div>
+          ) : null}
 
           <div className="flex justify-end gap-2">
             <Button

@@ -51,4 +51,29 @@ describe("CreateRemeseroPaymentDialog", () => {
     expect(screen.getByLabelText(/monto a pagar/i)).toBeDefined();
     expect(screen.getByLabelText(/nota/i)).toBeDefined();
   });
+
+  it("shows the 'Dejar en 0' toggle when deudaActual > 0", () => {
+    render(
+      <CreateRemeseroPaymentDialog
+        open={true}
+        onOpenChange={() => {}}
+        remesero={baseRemesero}
+        onCreated={() => {}}
+      />,
+    );
+    expect(screen.getByRole("switch", { name: /dejar en 0/i })).toBeDefined();
+  });
+
+  it("hides the 'Dejar en 0' toggle when deudaActual <= 0", () => {
+    const remeseroFondo: Remesero = { ...baseRemesero, deudaActual: -100 };
+    render(
+      <CreateRemeseroPaymentDialog
+        open={true}
+        onOpenChange={() => {}}
+        remesero={remeseroFondo}
+        onCreated={() => {}}
+      />,
+    );
+    expect(screen.queryByRole("switch", { name: /dejar en 0/i })).toBeNull();
+  });
 });
