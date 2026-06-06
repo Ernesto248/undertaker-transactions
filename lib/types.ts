@@ -1,5 +1,15 @@
 export type TransactionType = "deposit" | "withdrawal" | "transfer";
 
+export type Bank = {
+  id: string;
+  name: string;
+};
+
+export type GmailAccountOption = {
+  id: string;
+  accountName: string;
+};
+
 export type Transaction = {
   id: string;
   bank: string;

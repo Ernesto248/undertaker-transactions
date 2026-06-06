@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getPool } from "@/lib/db";
+import { getPool, withRetry } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -64,18 +64,23 @@ export async function PATCH(
 
   values.push(id);
 
-  const client = await getPool().connect();
-
   try {
-    const updated = await client.query(
-      `
-      UPDATE remeseros
-      SET ${updates.join(", ")}, updated_at = now()
-      WHERE id = $${values.length} AND deleted_at IS NULL
-      RETURNING id
-      `,
-      values,
-    );
+    const updated = await withRetry(async () => {
+      const client = await getPool().connect();
+      try {
+        return await client.query(
+          `
+          UPDATE remeseros
+          SET ${updates.join(", ")}, updated_at = now()
+          WHERE id = $${values.length} AND deleted_at IS NULL
+          RETURNING id
+          `,
+          values,
+        );
+      } finally {
+        client.release();
+      }
+    });
 
     if (!updated.rows[0]?.id) {
       return Response.json(
@@ -94,8 +99,6 @@ export async function PATCH(
     }
 
     return Response.json({ ok: false, error: "server_error" }, { status: 500 });
-  } finally {
-    client.release();
   }
 }
 

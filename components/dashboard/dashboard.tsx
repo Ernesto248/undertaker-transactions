@@ -13,11 +13,15 @@ import { BankTotalsCard } from "./bank-totals-card";
 import { FilterBar, type DateFilter } from "./filter-bar";
 import { AccountsView } from "./accounts-view";
 import { RemeserosView } from "./remeseros-view";
-import { DollarSign, TrendingUp, Calendar } from "lucide-react";
+import { CreateTransactionDialog } from "./create-transaction-dialog";
+import { Button } from "@/components/ui/button";
+import { DollarSign, TrendingUp, Calendar, Plus } from "lucide-react";
 import {
   AccountBalance,
   AccountMovement,
   AccountMovementType,
+  Bank,
+  GmailAccountOption,
   Remesero,
   RemeseroPayment,
   RemeseroShareSummary,
@@ -73,6 +77,13 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
     from: Date | undefined;
     to: Date | undefined;
   }>({ from: undefined, to: undefined });
+
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [manualBanks, setManualBanks] = useState<Bank[]>([]);
+  const [manualGmailAccounts, setManualGmailAccounts] = useState<
+    GmailAccountOption[]
+  >([]);
+  const [loadingManualOptions, setLoadingManualOptions] = useState(false);
 
   useEffect(() => {
     const currentUrl = new URL(window.location.href);
@@ -396,6 +407,57 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
     }
   };
 
+  const loadManualOptions = async () => {
+    if (loadingManualOptions) return;
+    if (manualBanks.length > 0 && manualGmailAccounts.length > 0) return;
+    setLoadingManualOptions(true);
+    try {
+      const [banksRes, accountsRes] = await Promise.all([
+        fetch(apiUrl("/api/banks"), { cache: "no-store" }),
+        fetch(apiUrl("/api/gmail-accounts"), { cache: "no-store" }),
+      ]);
+
+      if (banksRes.ok) {
+        const banksData = (await banksRes.json()) as {
+          ok?: boolean;
+          banks?: Bank[];
+        };
+        if (banksData.ok && Array.isArray(banksData.banks)) {
+          setManualBanks(banksData.banks);
+        }
+      }
+
+      if (accountsRes.ok) {
+        const accountsData = (await accountsRes.json()) as {
+          ok?: boolean;
+          gmailAccounts?: GmailAccountOption[];
+        };
+        if (accountsData.ok && Array.isArray(accountsData.gmailAccounts)) {
+          setManualGmailAccounts(accountsData.gmailAccounts);
+        }
+      }
+    } finally {
+      setLoadingManualOptions(false);
+    }
+  };
+
+  const handleCreateDialogOpenChange = (open: boolean) => {
+    setCreateDialogOpen(open);
+    if (open) {
+      void loadManualOptions();
+    }
+  };
+
+  const handleManualTransactionCreated = async (payload: {
+    remeseroAssigned: boolean;
+  }) => {
+    if (payload.remeseroAssigned) {
+      await Promise.all([refreshTransactions(), refreshRemeseros()]);
+    } else {
+      await refreshTransactions();
+    }
+  };
+
   useEffect(() => {
     void Promise.all([refreshRemeseros(), refreshAccounts()]);
   }, []);
@@ -712,14 +774,24 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
 
             {activeTab === "transactions" && (
               <div className="space-y-4">
-                <div>
-                  <h2 className="text-xl md:text-2xl font-bold text-foreground">
-                    Transacciones
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    {filteredTransactions.length} de {transactions.length}{" "}
-                    transacciones
-                  </p>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h2 className="text-xl md:text-2xl font-bold text-foreground">
+                      Transacciones
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      {filteredTransactions.length} de {transactions.length}{" "}
+                      transacciones
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => handleCreateDialogOpenChange(true)}
+                    className="w-full sm:w-auto"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Nueva transaccion
+                  </Button>
                 </div>
 
                 <FilterBar
@@ -802,6 +874,15 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
       </main>
 
       <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
+
+      <CreateTransactionDialog
+        open={createDialogOpen}
+        onOpenChange={handleCreateDialogOpenChange}
+        banks={manualBanks}
+        gmailAccounts={manualGmailAccounts}
+        remeseros={remeseros}
+        onCreated={handleManualTransactionCreated}
+      />
     </div>
   );
 }
