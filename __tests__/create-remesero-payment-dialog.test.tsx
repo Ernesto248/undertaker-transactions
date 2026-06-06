@@ -38,4 +38,17 @@ describe("CreateRemeseroPaymentDialog", () => {
     expect(screen.getByText("Osmel")).toBeDefined();
     expect(screen.getByText(/1,360,422/)).toBeDefined();
   });
+
+  it("renders the amount and note inputs", () => {
+    render(
+      <CreateRemeseroPaymentDialog
+        open={true}
+        onOpenChange={() => {}}
+        remesero={baseRemesero}
+        onCreated={() => {}}
+      />,
+    );
+    expect(screen.getByLabelText(/monto a pagar/i)).toBeDefined();
+    expect(screen.getByLabelText(/nota/i)).toBeDefined();
+  });
 });

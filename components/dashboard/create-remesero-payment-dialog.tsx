@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -34,6 +35,8 @@ export function CreateRemeseroPaymentDialog({
   remesero,
   onCreated,
 }: CreateRemeseroPaymentDialogProps) {
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -45,6 +48,43 @@ export function CreateRemeseroPaymentDialog({
             <span>{formatCurrency(remesero.deudaActual)}</span>
           </DialogDescription>
         </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="payment-amount">Monto a pagar</Label>
+            <Input
+              id="payment-amount"
+              type="number"
+              min="0"
+              step="0.01"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              placeholder="0.00"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="payment-note">Nota (opcional)</Label>
+            <Input
+              id="payment-note"
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="Transferencia"
+              maxLength={500}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit">Registrar pago</Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );
