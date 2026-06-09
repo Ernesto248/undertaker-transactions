@@ -14,7 +14,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ChevronDown, ChevronUp, MessageCircle, Plus } from "lucide-react";
+import { ChevronDown, ChevronUp, DollarSign, MessageCircle, Plus } from "lucide-react";
+import { CreateRemeseroPaymentDialog } from "./create-remesero-payment-dialog";
 import { cn } from "@/lib/utils";
 import type {
   Remesero,
@@ -87,6 +88,8 @@ export function RemeserosView({
     Record<string, boolean>
   >({});
   const [sharingById, setSharingById] = useState<Record<string, boolean>>({});
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [payingRemesero, setPayingRemesero] = useState<Remesero | null>(null);
 
   const totals = useMemo(() => {
     const deudaTotal = remeseros.reduce(
@@ -324,6 +327,11 @@ export function RemeserosView({
     }
   };
 
+  const handleOpenPayment = (remesero: Remesero) => {
+    setPayingRemesero(remesero);
+    setPaymentDialogOpen(true);
+  };
+
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -447,6 +455,16 @@ export function RemeserosView({
                       {sharingById[remesero.id]
                         ? "Compartiendo..."
                         : "Compartir"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => handleOpenPayment(remesero)}
+                    >
+                      <DollarSign className="h-4 w-4 mr-1" />
+                      Pagar
                     </Button>
                     <Button
                       asChild
@@ -742,6 +760,29 @@ export function RemeserosView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <CreateRemeseroPaymentDialog
+        open={paymentDialogOpen}
+        onOpenChange={(open) => {
+          setPaymentDialogOpen(open);
+          if (!open) {
+            setPayingRemesero(null);
+          }
+        }}
+        remesero={
+          payingRemesero ?? {
+            id: "",
+            nombre: "",
+            precioActual: 0,
+            deudaActual: 0,
+            createdAt: "",
+            updatedAt: "",
+          }
+        }
+        onCreated={() => {
+          void onRefreshRemeseros();
+        }}
+      />
     </div>
   );
 }

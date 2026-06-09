@@ -30,6 +30,35 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
+function formatThousandsInput(value: string) {
+  const [wholePart, decimalPart] = value.split(".");
+  const digitsOnly = (wholePart ?? "").replace(/\D/g, "");
+
+  if (!digitsOnly) {
+    return decimalPart ? `0.${decimalPart.replace(/\D/g, "")}` : "";
+  }
+
+  const formattedWhole = digitsOnly.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  if (decimalPart === undefined) {
+    return formattedWhole;
+  }
+
+  return `${formattedWhole}.${decimalPart.replace(/\D/g, "")}`;
+}
+
+function normalizeAmountInput(value: string) {
+  const cleaned = value.replace(/,/g, "").replace(/[^\d.]/g, "");
+  const firstDotIndex = cleaned.indexOf(".");
+
+  if (firstDotIndex === -1) {
+    return cleaned;
+  }
+
+  const wholePart = cleaned.slice(0, firstDotIndex);
+  const decimalPart = cleaned.slice(firstDotIndex + 1).replace(/\./g, "");
+  return `${wholePart}.${decimalPart}`;
+}
+
 export function CreateRemeseroPaymentDialog({
   open,
   onOpenChange,
@@ -44,6 +73,16 @@ export function CreateRemeseroPaymentDialog({
     | { kind: "submitting" }
     | { kind: "error"; message: string }
   >({ kind: "idle" });
+
+  useEffect(() => {
+    if (!open) {
+      setAmount("");
+      setNote("");
+      setZeroOut(false);
+      setSubmitState({ kind: "idle" });
+    }
+  }, [open]);
+
   useEffect(() => {
     if (zeroOut && remesero.deudaActual > 0) {
       setAmount(String(remesero.deudaActual));
@@ -106,11 +145,10 @@ export function CreateRemeseroPaymentDialog({
             <Label htmlFor="payment-amount">Monto a pagar</Label>
             <Input
               id="payment-amount"
-              type="number"
-              min="0"
-              step="0.01"
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
+              type="text"
+              inputMode="decimal"
+              value={formatThousandsInput(amount)}
+              onChange={(event) => setAmount(normalizeAmountInput(event.target.value))}
               placeholder="0.00"
               readOnly={zeroOut}
             />

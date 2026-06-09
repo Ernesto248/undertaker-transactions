@@ -52,6 +52,22 @@ describe("CreateRemeseroPaymentDialog", () => {
     expect(screen.getByLabelText(/nota/i)).toBeDefined();
   });
 
+  it("formats the amount input with thousand separators while typing", () => {
+    render(
+      <CreateRemeseroPaymentDialog
+        open={true}
+        onOpenChange={() => {}}
+        remesero={baseRemesero}
+        onCreated={() => {}}
+      />,
+    );
+
+    const amountInput = screen.getByLabelText(/monto a pagar/i) as HTMLInputElement;
+    fireEvent.change(amountInput, { target: { value: "1360422" } });
+
+    expect(amountInput.value).toBe("1,360,422");
+  });
+
   it("shows the 'Dejar en 0' toggle when deudaActual > 0", () => {
     render(
       <CreateRemeseroPaymentDialog
@@ -89,7 +105,7 @@ describe("CreateRemeseroPaymentDialog", () => {
     const toggle = screen.getByRole("switch", { name: /dejar en 0/i });
     fireEvent.click(toggle);
     const amountInput = screen.getByLabelText(/monto a pagar/i) as HTMLInputElement;
-    expect(amountInput.value).toBe("1360422");
+    expect(amountInput.value).toBe("1,360,422");
     expect(amountInput.readOnly).toBe(true);
   });
 
@@ -148,5 +164,79 @@ describe("CreateRemeseroPaymentDialog", () => {
     );
     expect(onCreated).toHaveBeenCalled();
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("submits with deudaActual when 'Dejar en 0' is on", async () => {
+    const fetchMock = vi.spyOn(window, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, payment: { id: "p-1" } }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    render(
+      <CreateRemeseroPaymentDialog
+        open={true}
+        onOpenChange={() => {}}
+        remesero={baseRemesero}
+        onCreated={() => {}}
+      />,
+    );
+
+    const toggle = screen.getByRole("switch", { name: /dejar en 0/i });
+    fireEvent.click(toggle);
+
+    const submitButton = screen.getByRole("button", { name: /registrar pago/i });
+    fireEvent.click(submitButton);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/remeseros/r-1/payments",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ amountPaid: 1360422 }),
+      }),
+    );
+  });
+
+  it("resets the form when the modal is closed", () => {
+    const onOpenChange = vi.fn();
+    const { rerender } = render(
+      <CreateRemeseroPaymentDialog
+        open={true}
+        onOpenChange={onOpenChange}
+        remesero={baseRemesero}
+        onCreated={() => {}}
+      />,
+    );
+
+    const amountInput = screen.getByLabelText(/monto a pagar/i) as HTMLInputElement;
+    fireEvent.change(amountInput, { target: { value: "999" } });
+    const toggle = screen.getByRole("switch", { name: /dejar en 0/i });
+    fireEvent.click(toggle);
+
+    rerender(
+      <CreateRemeseroPaymentDialog
+        open={false}
+        onOpenChange={onOpenChange}
+        remesero={baseRemesero}
+        onCreated={() => {}}
+      />,
+    );
+    rerender(
+      <CreateRemeseroPaymentDialog
+        open={true}
+        onOpenChange={onOpenChange}
+        remesero={baseRemesero}
+        onCreated={() => {}}
+      />,
+    );
+
+    const amountAfter = screen.getByLabelText(/monto a pagar/i) as HTMLInputElement;
+    const toggleAfter = screen.getByRole("switch", {
+      name: /dejar en 0/i,
+    }) as HTMLButtonElement;
+    expect(amountAfter.value).toBe("");
+    expect(toggleAfter.getAttribute("data-state")).toBe("unchecked");
   });
 });
