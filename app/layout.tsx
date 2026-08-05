@@ -7,7 +7,7 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 
 export const metadata: Metadata = {
-  title: 'LM Transactions - Panel de Transacciones',
+  title: 'Undertaker Transactions - Panel de Transacciones',
   description: 'Dashboard para monitorear transacciones bancarias en tiempo real',
   icons: {
     icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],

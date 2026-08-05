@@ -14,7 +14,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ChevronDown, ChevronUp, DollarSign, MessageCircle, Plus } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  DollarSign,
+  MessageCircle,
+  PencilLine,
+  Plus,
+} from "lucide-react";
 import { CreateRemeseroPaymentDialog } from "./create-remesero-payment-dialog";
 import { cn } from "@/lib/utils";
 import type {
@@ -35,8 +42,8 @@ type RemeserosViewProps = {
   }) => Promise<void>;
   onUpdateRemesero: (
     id: string,
-    input: { nombre?: string; precioActual?: number },
-  ) => Promise<void>;
+    input: { nombre?: string; precioActual?: number; deudaActual?: number },
+  ) => Promise<boolean>;
   onDeleteRemesero: (id: string) => Promise<void>;
   onLoadPayments: (id: string) => Promise<void>;
   onCreatePayment: (
@@ -90,6 +97,11 @@ export function RemeserosView({
   const [sharingById, setSharingById] = useState<Record<string, boolean>>({});
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [payingRemesero, setPayingRemesero] = useState<Remesero | null>(null);
+  const [debtEditingRemesero, setDebtEditingRemesero] =
+    useState<Remesero | null>(null);
+  const [debtDraft, setDebtDraft] = useState("");
+  const [savingDebt, setSavingDebt] = useState(false);
+  const [debtEditError, setDebtEditError] = useState<string | null>(null);
 
   const totals = useMemo(() => {
     const deudaTotal = remeseros.reduce(
@@ -332,6 +344,51 @@ export function RemeserosView({
     setPaymentDialogOpen(true);
   };
 
+  const handleOpenDebtEdit = (remesero: Remesero) => {
+    setDebtEditingRemesero(remesero);
+    setDebtDraft(String(remesero.deudaActual));
+    setDebtEditError(null);
+  };
+
+  const handleDebtDialogOpenChange = (open: boolean) => {
+    if (open || savingDebt) return;
+    setDebtEditingRemesero(null);
+    setDebtDraft("");
+    setDebtEditError(null);
+  };
+
+  const handleSaveDebt = async () => {
+    if (!debtEditingRemesero) return;
+
+    if (debtDraft.trim() === "") {
+      setDebtEditError("Ingresa una deuda valida.");
+      return;
+    }
+
+    const deudaActual = Number(debtDraft);
+    if (!Number.isFinite(deudaActual)) {
+      setDebtEditError("Ingresa una deuda valida.");
+      return;
+    }
+
+    setSavingDebt(true);
+    setDebtEditError(null);
+    try {
+      const updated = await onUpdateRemesero(debtEditingRemesero.id, {
+        deudaActual,
+      });
+      if (!updated) {
+        setDebtEditError("No se pudo actualizar la deuda.");
+        return;
+      }
+
+      setDebtEditingRemesero(null);
+      setDebtDraft("");
+    } finally {
+      setSavingDebt(false);
+    }
+  };
+
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -465,6 +522,16 @@ export function RemeserosView({
                     >
                       <DollarSign className="h-4 w-4 mr-1" />
                       Pagar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => handleOpenDebtEdit(remesero)}
+                    >
+                      <PencilLine className="h-4 w-4 mr-1" />
+                      Editar deuda
                     </Button>
                     <Button
                       asChild
@@ -783,6 +850,53 @@ export function RemeserosView({
           void onRefreshRemeseros();
         }}
       />
+
+      <Dialog
+        open={debtEditingRemesero !== null}
+        onOpenChange={handleDebtDialogOpenChange}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar deuda</DialogTitle>
+            <DialogDescription>
+              Ajusta directamente la deuda de {debtEditingRemesero?.nombre}.
+              Usa un valor negativo cuando represente un fondo a favor.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="editar-deuda-actual">Deuda actual</Label>
+            <Input
+              id="editar-deuda-actual"
+              type="number"
+              step="0.01"
+              value={debtDraft}
+              onChange={(event) => {
+                setDebtDraft(event.target.value);
+                setDebtEditError(null);
+              }}
+              aria-invalid={debtEditError !== null}
+            />
+            {debtEditError && (
+              <p className="text-sm text-destructive" role="alert">
+                {debtEditError}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleDebtDialogOpenChange(false)}
+              disabled={savingDebt}
+            >
+              Cancelar
+            </Button>
+            <Button type="button" onClick={handleSaveDebt} disabled={savingDebt}>
+              {savingDebt ? "Guardando..." : "Guardar deuda"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

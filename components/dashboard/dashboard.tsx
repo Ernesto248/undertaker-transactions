@@ -199,9 +199,10 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
       };
 
       if (!data?.ok || !Array.isArray(data.movements)) return;
+      const movements = data.movements;
       setMovementsByAccount((prev) => ({
         ...prev,
-        [accountId]: data.movements,
+        [accountId]: movements,
       }));
     } finally {
       setLoadingMovementsByAccount((prev) => ({ ...prev, [accountId]: false }));
@@ -273,7 +274,7 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
 
   const updateRemesero = async (
     id: string,
-    input: { nombre?: string; precioActual?: number },
+    input: { nombre?: string; precioActual?: number; deudaActual?: number },
   ) => {
     const res = await fetch(apiUrl(`/api/remeseros/${id}`), {
       method: "PATCH",
@@ -281,8 +282,9 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
       body: JSON.stringify(input),
     });
 
-    if (!res.ok) return;
+    if (!res.ok) return false;
     await refreshRemeseros();
+    return true;
   };
 
   const deleteRemesero = async (id: string) => {
@@ -308,7 +310,8 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
       };
 
       if (!data?.ok || !Array.isArray(data.payments)) return;
-      setPaymentsByRemesero((prev) => ({ ...prev, [id]: data.payments }));
+      const payments = data.payments;
+      setPaymentsByRemesero((prev) => ({ ...prev, [id]: payments }));
     } finally {
       setLoadingPaymentsByRemesero((prev) => ({ ...prev, [id]: false }));
     }

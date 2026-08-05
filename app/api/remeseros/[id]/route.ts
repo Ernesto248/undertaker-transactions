@@ -11,9 +11,17 @@ const UpdateRemeseroSchema = z
       .transform((v) => (typeof v === "string" ? Number(v) : v))
       .refine((v) => Number.isFinite(v) && v >= 0, "precioActual must be >= 0")
       .optional(),
+    deudaActual: z
+      .union([z.number(), z.string().trim().min(1)])
+      .transform((v) => (typeof v === "string" ? Number(v) : v))
+      .refine((v) => Number.isFinite(v), "deudaActual must be a finite number")
+      .optional(),
   })
   .refine(
-    (data) => data.nombre !== undefined || data.precioActual !== undefined,
+    (data) =>
+      data.nombre !== undefined ||
+      data.precioActual !== undefined ||
+      data.deudaActual !== undefined,
     {
       message: "at least one field is required",
     },
@@ -60,6 +68,11 @@ export async function PATCH(
   if (parsed.data.precioActual !== undefined) {
     values.push(parsed.data.precioActual);
     updates.push(`precio_actual = $${values.length}`);
+  }
+
+  if (parsed.data.deudaActual !== undefined) {
+    values.push(parsed.data.deudaActual);
+    updates.push(`deuda_actual = $${values.length}`);
   }
 
   values.push(id);

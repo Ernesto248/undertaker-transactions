@@ -103,8 +103,7 @@ export function FilterBar({
     senderFilter.trim() !== "" ||
     remeseroFilter !== "all" ||
     amountFilter.trim() !== "" ||
-    dateFilter !== "all" ||
-    (dateFilter === "custom" && (customDateRange.from || customDateRange.to));
+    dateFilter !== "all";
 
   const activeFiltersCount = [
     bankFilter !== "all",
