@@ -172,39 +172,48 @@ export function AccountsView({
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <Card className="border-border/70 bg-card/60">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              Saldo actual
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <Card className="min-w-0 overflow-hidden border-border/70 bg-card/60">
+          <CardHeader className="px-2 pb-1 pt-3 sm:px-6 sm:pb-2 sm:pt-6">
+            <CardTitle className="truncate text-[11px] text-muted-foreground sm:text-sm">
+              Saldo
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-xl font-semibold text-foreground">
+          <CardContent className="min-w-0 px-2 pb-3 sm:px-6 sm:pb-6">
+            <p
+              className="truncate text-[clamp(0.75rem,3.6vw,1.25rem)] font-semibold tabular-nums leading-tight text-foreground"
+              title={formatLocal(totals.totalBalance)}
+            >
               {formatLocal(totals.totalBalance)}
             </p>
           </CardContent>
         </Card>
-        <Card className="border-border/70 bg-card/60">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              Ingresos
+        <Card className="min-w-0 overflow-hidden border-border/70 bg-card/60">
+          <CardHeader className="px-2 pb-1 pt-3 sm:px-6 sm:pb-2 sm:pt-6">
+            <CardTitle className="truncate text-[11px] text-muted-foreground sm:text-sm">
+              Entradas
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-xl font-semibold text-foreground">
+          <CardContent className="min-w-0 px-2 pb-3 sm:px-6 sm:pb-6">
+            <p
+              className="truncate text-[clamp(0.75rem,3.6vw,1.25rem)] font-semibold tabular-nums leading-tight text-foreground"
+              title={formatLocal(totals.totalIncoming)}
+            >
               {formatLocal(totals.totalIncoming)}
             </p>
           </CardContent>
         </Card>
-        <Card className="border-border/70 bg-card/60">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">
-              Egresos (wire + gasto)
+        <Card className="min-w-0 overflow-hidden border-border/70 bg-card/60">
+          <CardHeader className="px-2 pb-1 pt-3 sm:px-6 sm:pb-2 sm:pt-6">
+            <CardTitle className="truncate text-[11px] text-muted-foreground sm:text-sm">
+              Salidas
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-xl font-semibold text-foreground">
+          <CardContent className="min-w-0 px-2 pb-3 sm:px-6 sm:pb-6">
+            <p
+              className="truncate text-[clamp(0.75rem,3.6vw,1.25rem)] font-semibold tabular-nums leading-tight text-foreground"
+              title={formatLocal(totals.totalOutgoing)}
+            >
               {formatLocal(totals.totalOutgoing)}
             </p>
           </CardContent>
