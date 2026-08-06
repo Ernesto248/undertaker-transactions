@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { Remesero, Transaction } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { formatTransactionDate } from "@/lib/date-time";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -102,17 +103,6 @@ export function TransactionCard({
     accountPalette,
   );
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat("es-ES", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZone: "Etc/GMT+5",
-    }).format(date);
-  };
-
   const formatAmount = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -206,7 +196,7 @@ export function TransactionCard({
               </button>
             </div>
             <p className="mt-2 text-[10px] md:text-xs text-muted-foreground">
-              {formatDate(transaction.createdAt)}
+              {formatTransactionDate(transaction.createdAt)}
             </p>
             {onAssign && (
               <div className="mt-3 flex flex-wrap gap-2">
