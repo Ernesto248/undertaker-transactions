@@ -499,12 +499,12 @@ export function RemeserosView({
                   </div>
                 </div>
                 {!isExpanded && (
-                  <div className="flex justify-center gap-2">
+                  <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-2">
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="shrink-0"
+                      className="w-full min-w-0 justify-center px-2"
                       onClick={() => handleShareWhatsapp(remesero)}
                       disabled={sharingById[remesero.id] === true}
                     >
@@ -517,7 +517,7 @@ export function RemeserosView({
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="shrink-0"
+                      className="w-full min-w-0 justify-center px-2"
                       onClick={() => handleOpenPayment(remesero)}
                     >
                       <DollarSign className="h-4 w-4 mr-1" />
@@ -527,7 +527,7 @@ export function RemeserosView({
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="shrink-0"
+                      className="w-full min-w-0 justify-center px-2"
                       onClick={() => handleOpenDebtEdit(remesero)}
                     >
                       <PencilLine className="h-4 w-4 mr-1" />
@@ -537,7 +537,7 @@ export function RemeserosView({
                       asChild
                       variant="ghost"
                       size="sm"
-                      className="shrink-0"
+                      className="w-full min-w-0 justify-center px-2"
                     >
                       <Link href={`/remeseros/${remesero.id}`}>
                         Ver detalle <ChevronDown className="h-4 w-4 ml-1" />
