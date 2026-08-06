@@ -1,9 +1,9 @@
 "use client"
 
-import { Activity, Bell, Menu, X, RefreshCw } from "lucide-react"
+import { Activity, Menu, X, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { useState } from "react"
+import { LogoutButton } from "@/components/auth/logout-button"
 
 interface HeaderProps {
   onMenuToggle: () => void
@@ -13,8 +13,6 @@ interface HeaderProps {
 }
 
 export function Header({ onMenuToggle, isMenuOpen, onRefresh, isRefreshing }: HeaderProps) {
-  const [hasNotifications] = useState(true)
-
   return (
     <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-lg border-b border-border">
       <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4">
@@ -55,12 +53,7 @@ export function Header({ onMenuToggle, isMenuOpen, onRefresh, isRefreshing }: He
           >
             <RefreshCw className={`h-5 w-5 ${isRefreshing ? "animate-spin" : ""}`} />
           </Button>
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-5 w-5" />
-            {hasNotifications && (
-              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive" />
-            )}
-          </Button>
+          <LogoutButton />
         </div>
       </div>
     </header>

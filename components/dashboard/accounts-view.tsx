@@ -80,7 +80,7 @@ export function AccountsView({
   const formatLocal = (amount: number) => {
     return new Intl.NumberFormat("es-DO", {
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      maximumFractionDigits: 2,
     }).format(amount);
   };
 
@@ -325,7 +325,9 @@ export function AccountsView({
                         </Label>
                         <Input
                           type="number"
-                          min="0"
+                          min="0.01"
+                          step="0.01"
+                          inputMode="decimal"
                           value={draft.amount}
                           onChange={(event) =>
                             setDraftByAccount((prev) => ({
@@ -336,7 +338,7 @@ export function AccountsView({
                               },
                             }))
                           }
-                          placeholder="0"
+                          placeholder="0.00"
                           className="bg-secondary border-border"
                         />
                       </div>
