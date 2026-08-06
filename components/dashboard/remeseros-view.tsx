@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Dialog,
   DialogContent,
@@ -58,6 +59,8 @@ type RemeserosViewProps = {
   onGetShareSummary: (id: string) => Promise<RemeseroShareSummary | null>;
 };
 
+type DebtBalanceKind = "deuda" | "fondo";
+
 export function RemeserosView({
   remeseros,
   paymentsByRemesero,
@@ -100,6 +103,8 @@ export function RemeserosView({
   const [debtEditingRemesero, setDebtEditingRemesero] =
     useState<Remesero | null>(null);
   const [debtDraft, setDebtDraft] = useState("");
+  const [debtBalanceKind, setDebtBalanceKind] =
+    useState<DebtBalanceKind>("deuda");
   const [savingDebt, setSavingDebt] = useState(false);
   const [debtEditError, setDebtEditError] = useState<string | null>(null);
 
@@ -346,7 +351,8 @@ export function RemeserosView({
 
   const handleOpenDebtEdit = (remesero: Remesero) => {
     setDebtEditingRemesero(remesero);
-    setDebtDraft(String(remesero.deudaActual));
+    setDebtDraft(String(Math.abs(remesero.deudaActual)));
+    setDebtBalanceKind(remesero.deudaActual < 0 ? "fondo" : "deuda");
     setDebtEditError(null);
   };
 
@@ -354,6 +360,7 @@ export function RemeserosView({
     if (open || savingDebt) return;
     setDebtEditingRemesero(null);
     setDebtDraft("");
+    setDebtBalanceKind("deuda");
     setDebtEditError(null);
   };
 
@@ -365,11 +372,14 @@ export function RemeserosView({
       return;
     }
 
-    const deudaActual = Number(debtDraft);
-    if (!Number.isFinite(deudaActual)) {
-      setDebtEditError("Ingresa una deuda valida.");
+    const amount = Number(debtDraft);
+    if (!Number.isFinite(amount) || amount < 0) {
+      setDebtEditError("Ingresa un monto valido igual o mayor que 0.");
       return;
     }
+
+    const normalizedKind = amount === 0 ? "deuda" : debtBalanceKind;
+    const deudaActual = normalizedKind === "fondo" ? -amount : amount;
 
     setSavingDebt(true);
     setDebtEditError(null);
@@ -384,10 +394,14 @@ export function RemeserosView({
 
       setDebtEditingRemesero(null);
       setDebtDraft("");
+      setDebtBalanceKind("deuda");
     } finally {
       setSavingDebt(false);
     }
   };
+
+  const debtDraftIsZero =
+    debtDraft.trim() !== "" && Number(debtDraft) === 0;
 
   return (
     <div className="space-y-4 md:space-y-6">
@@ -859,23 +873,94 @@ export function RemeserosView({
           <DialogHeader>
             <DialogTitle>Editar deuda</DialogTitle>
             <DialogDescription>
-              Ajusta directamente la deuda de {debtEditingRemesero?.nombre}.
-              Usa un valor negativo cuando represente un fondo a favor.
+              Ajusta directamente el saldo de {debtEditingRemesero?.nombre}.
+              Selecciona el tipo e ingresa el monto sin signo.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="editar-deuda-actual">Deuda actual</Label>
-            <Input
-              id="editar-deuda-actual"
-              type="number"
-              step="0.01"
-              value={debtDraft}
-              onChange={(event) => {
-                setDebtDraft(event.target.value);
-                setDebtEditError(null);
-              }}
-              aria-invalid={debtEditError !== null}
-            />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Tipo de saldo</Label>
+              <RadioGroup
+                value={debtBalanceKind}
+                onValueChange={(value) => {
+                  if (value === "fondo" && debtDraftIsZero) return;
+                  setDebtBalanceKind(value as DebtBalanceKind);
+                  setDebtEditError(null);
+                }}
+                className="grid grid-cols-2 gap-2"
+              >
+                <Label
+                  htmlFor="editar-saldo-deuda"
+                  className={cn(
+                    "flex min-h-16 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 transition-colors",
+                    debtBalanceKind === "deuda"
+                      ? "border-primary bg-primary/10"
+                      : "border-border hover:bg-secondary/60",
+                  )}
+                >
+                  <RadioGroupItem
+                    id="editar-saldo-deuda"
+                    value="deuda"
+                    aria-label="Deuda"
+                  />
+                  <span className="space-y-0.5">
+                    <span className="block text-sm font-semibold">Deuda</span>
+                    <span className="block text-xs font-normal text-muted-foreground">
+                      Saldo por cobrar
+                    </span>
+                  </span>
+                </Label>
+                <Label
+                  htmlFor="editar-saldo-fondo"
+                  className={cn(
+                    "flex min-h-16 items-center gap-3 rounded-lg border px-3 py-2 transition-colors",
+                    debtDraftIsZero
+                      ? "cursor-not-allowed opacity-50"
+                      : "cursor-pointer",
+                    debtBalanceKind === "fondo"
+                      ? "border-[hsl(var(--success))] bg-[hsl(var(--success))]/10"
+                      : "border-border hover:bg-secondary/60",
+                  )}
+                >
+                  <RadioGroupItem
+                    id="editar-saldo-fondo"
+                    value="fondo"
+                    disabled={debtDraftIsZero}
+                    aria-label="Fondo"
+                  />
+                  <span className="space-y-0.5">
+                    <span className="block text-sm font-semibold">Fondo</span>
+                    <span className="block text-xs font-normal text-muted-foreground">
+                      Saldo a favor
+                    </span>
+                  </span>
+                </Label>
+              </RadioGroup>
+              {debtDraftIsZero && (
+                <p className="text-xs text-muted-foreground">
+                  Un saldo de 0 se registra automáticamente como deuda.
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editar-deuda-actual">Monto</Label>
+              <Input
+                id="editar-deuda-actual"
+                type="number"
+                min="0"
+                step="0.01"
+                value={debtDraft}
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  setDebtDraft(nextValue);
+                  if (nextValue.trim() !== "" && Number(nextValue) === 0) {
+                    setDebtBalanceKind("deuda");
+                  }
+                  setDebtEditError(null);
+                }}
+                aria-invalid={debtEditError !== null}
+              />
+            </div>
             {debtEditError && (
               <p className="text-sm text-destructive" role="alert">
                 {debtEditError}
