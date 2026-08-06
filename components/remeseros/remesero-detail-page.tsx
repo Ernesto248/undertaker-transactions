@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -28,13 +29,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RemeseroDetailShell } from "@/components/remeseros/remesero-detail-shell";
 import type {
   RemeseroDetailAssignment,
   RemeseroDetailData,
   RemeseroShareSummary,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { queueDashboardReturnTab } from "@/lib/dashboard-tabs";
+import {
+  isDashboardTab,
+  queueDashboardReturnTab,
+} from "@/lib/dashboard-tabs";
 
 type RemeseroDetailPageProps = {
   remeseroId: string;
@@ -189,6 +194,7 @@ function SummaryMetric({
 }
 
 export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
+  const router = useRouter();
   const [detail, setDetail] = useState<RemeseroDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloading, setReloading] = useState(false);
@@ -215,6 +221,15 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
   const queueRemeserosReturn = useCallback(() => {
     queueDashboardReturnTab("remeseros");
   }, []);
+
+  const navigateToDashboardTab = useCallback(
+    (tab: string) => {
+      if (!isDashboardTab(tab)) return;
+      queueDashboardReturnTab(tab);
+      router.push("/");
+    },
+    [router],
+  );
 
   const resolveCurrentRange = useCallback(() => {
     if (!detail)
@@ -522,8 +537,11 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-background">
-        <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8 space-y-6">
+      <RemeseroDetailShell
+        onNavigate={navigateToDashboardTab}
+        isRefreshing
+      >
+        <div className="space-y-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <Skeleton className="h-10 w-full sm:w-48" />
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
@@ -562,14 +580,18 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
             </Card>
           ))}
         </div>
-      </main>
+      </RemeseroDetailShell>
     );
   }
 
   if (!detail || error) {
     return (
-      <main className="min-h-screen bg-background">
-        <div className="mx-auto max-w-7xl px-4 py-8 md:px-6 space-y-4">
+      <RemeseroDetailShell
+        onNavigate={navigateToDashboardTab}
+        onRefresh={() => void loadDetail(undefined, undefined, true)}
+        isRefreshing={loading}
+      >
+        <div className="space-y-4">
           <Button asChild variant="outline">
             <Link href="/" onClick={queueRemeserosReturn}>
               <ArrowLeft className="h-4 w-4 mr-2" /> Volver a remeseros
@@ -585,7 +607,7 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
             Reintentar
           </Button>
         </div>
-      </main>
+      </RemeseroDetailShell>
     );
   }
 
@@ -618,7 +640,17 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
     "h-10 w-full rounded-xl border border-input bg-background/80 px-3 text-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/20";
 
   return (
-    <main className="min-h-screen bg-background">
+    <RemeseroDetailShell
+      onNavigate={navigateToDashboardTab}
+      onRefresh={() =>
+        void loadDetail(
+          detail.selectedRange.from,
+          detail.selectedRange.to,
+          false,
+        )
+      }
+      isRefreshing={reloading}
+    >
       <Dialog open={settingsOpen} onOpenChange={handleSettingsOpenChange}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
@@ -685,7 +717,7 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
         </DialogContent>
       </Dialog>
 
-      <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8 space-y-6">
+      <div className="space-y-6">
         <section className="overflow-hidden rounded-3xl border border-border/80 bg-card/95 shadow-sm">
           <div className="border-b border-border/70 px-4 py-4 md:px-6">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -1293,6 +1325,6 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
           </aside>
         </div>
       </div>
-    </main>
+    </RemeseroDetailShell>
   );
 }
