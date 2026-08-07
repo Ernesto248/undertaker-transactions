@@ -274,7 +274,12 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
 
   const updateRemesero = async (
     id: string,
-    input: { nombre?: string; precioActual?: number; deudaActual?: number },
+    input: {
+      nombre?: string;
+      precioActual?: number;
+      deudaActual?: number;
+      deudaActualNote?: string;
+    },
   ) => {
     const res = await fetch(apiUrl(`/api/remeseros/${id}`), {
       method: "PATCH",

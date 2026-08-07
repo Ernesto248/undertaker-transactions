@@ -43,7 +43,12 @@ type RemeserosViewProps = {
   }) => Promise<void>;
   onUpdateRemesero: (
     id: string,
-    input: { nombre?: string; precioActual?: number; deudaActual?: number },
+    input: {
+      nombre?: string;
+      precioActual?: number;
+      deudaActual?: number;
+      deudaActualNote?: string;
+    },
   ) => Promise<boolean>;
   onDeleteRemesero: (id: string) => Promise<void>;
   onLoadPayments: (id: string) => Promise<void>;
@@ -276,10 +281,11 @@ export function RemeserosView({
       const inicioType = summary.inicioDebt >= 0 ? "deuda" : "fondo";
       const finalType = summary.finalDebtType === "DEUDA" ? "deuda" : "fondo";
 
+      const movementGroups = summary.netGroups ?? summary.groups;
       const tiradoLines =
-        summary.groups.length === 0
-          ? ["Sin asignaciones desde el ultimo pago"]
-          : summary.groups.map((group) => {
+        movementGroups.length === 0
+          ? ["Sin movimientos desde el ultimo corte"]
+          : movementGroups.map((group) => {
               const price = formatPrice(group.priceApplied);
               const amounts = group.amountsUsd
                 .map((amount) => formatLocalFlexible(amount))
@@ -287,30 +293,30 @@ export function RemeserosView({
               return `${price} (${amounts}) = ${formatLocalFlexible(group.totalUsd)} USD`;
             });
 
-      const lastPaymentLines =
-        summary.hasPaymentCut &&
-        summary.lastPaymentAmount !== null &&
-        summary.cutAt
-          ? [
-              `💳 Monto: $ ${formatLocalFlexible(summary.lastPaymentAmount)}`,
-              `🕒 Fecha y hora: ${formatDateTime(summary.cutAt)}`,
-            ]
-          : ["⚠️ Sin pagos registrados"];
+      const lastCutLines = summary.cutAt
+        ? [
+            summary.cutType === "PAYMENT" && summary.lastPaymentAmount !== null
+              ? `Monto pagado: $ ${formatLocalFlexible(summary.lastPaymentAmount)}`
+              : `Saldo establecido: $ ${formatLocalFlexible(Math.abs(summary.inicioDebt))} ${inicioType}`,
+            `Fecha y hora: ${formatDateTime(summary.cutAt)}`,
+            ...(summary.cutNote ? [`Nota: ${summary.cutNote}`] : []),
+          ]
+        : ["Sin cortes registrados"];
 
       const message = [
         `*👤 GESTOR:* ${summary.remeseroNombre}`,
         "",
-        "*🧾 ULTIMO PAGO*",
-        ...lastPaymentLines,
+        "*ULTIMO CORTE*",
+        ...lastCutLines,
         "",
         "*🚩 INICIO*",
         `💰 $ ${formatLocalFlexible(Math.abs(summary.inicioDebt))} ${inicioType}`,
         "",
-        "*📤 ZELLE TIRADO*",
+        "*MOVIMIENTOS NETOS*",
         ...tiradoLines,
         `🧮 Total USD: ${formatLocalFlexible(summary.totalTiradoUsd)} USD`,
         "",
-        "*📊 TOTAL TIRADO*",
+        "*TOTAL NETO*",
         `💵 $ ${formatLocalFlexible(summary.totalTiradoCup)}`,
         "",
         "*🏁 FINAL*",
@@ -386,6 +392,7 @@ export function RemeserosView({
     try {
       const updated = await onUpdateRemesero(debtEditingRemesero.id, {
         deudaActual,
+        deudaActualNote: "Ajuste manual desde la interfaz",
       });
       if (!updated) {
         setDebtEditError("No se pudo actualizar la deuda.");
@@ -874,7 +881,8 @@ export function RemeserosView({
             <DialogTitle>Editar deuda</DialogTitle>
             <DialogDescription>
               Ajusta directamente el saldo de {debtEditingRemesero?.nombre}.
-              Selecciona el tipo e ingresa el monto sin signo.
+              Selecciona el tipo e ingresa el monto sin signo. Este cambio
+              quedara registrado como un corte manual para el siguiente tramo.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

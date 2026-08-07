@@ -16,6 +16,7 @@ const UpdateRemeseroSchema = z
       .transform((v) => (typeof v === "string" ? Number(v) : v))
       .refine((v) => Number.isFinite(v), "deudaActual must be a finite number")
       .optional(),
+    deudaActualNote: z.string().trim().max(500).optional(),
   })
   .refine(
     (data) =>
@@ -78,10 +79,28 @@ export async function PATCH(
   values.push(id);
 
   try {
-    const updated = await withRetry(async () => {
+    const result = await withRetry(async () => {
       const client = await getPool().connect();
       try {
-        return await client.query(
+        await client.query("BEGIN");
+
+        const current = await client.query(
+          `
+          SELECT id, deuda_actual as "deudaActual"
+          FROM remeseros
+          WHERE id = $1 AND deleted_at IS NULL
+          FOR UPDATE
+          LIMIT 1
+          `,
+          [id],
+        );
+
+        if (!current.rows[0]?.id) {
+          await client.query("ROLLBACK");
+          return null;
+        }
+
+        const updated = await client.query(
           `
           UPDATE remeseros
           SET ${updates.join(", ")}, updated_at = now()
@@ -90,19 +109,66 @@ export async function PATCH(
           `,
           values,
         );
+
+        let adjustment = null;
+        if (parsed.data.deudaActual !== undefined) {
+          const inserted = await client.query(
+            `
+            INSERT INTO remesero_debt_adjustments
+              (remesero_id, debt_before, debt_after, note, adjusted_at)
+            VALUES
+              ($1, $2, $3, $4, now())
+            RETURNING
+              id,
+              remesero_id as "remeseroId",
+              debt_before as "debtBefore",
+              debt_after as "debtAfter",
+              note,
+              adjusted_at as "adjustedAt"
+            `,
+            [
+              id,
+              Number(current.rows[0].deudaActual ?? 0),
+              parsed.data.deudaActual,
+              parsed.data.deudaActualNote ?? null,
+            ],
+          );
+          adjustment = inserted.rows[0] ?? null;
+        }
+
+        await client.query("COMMIT");
+        return { updated, adjustment };
+      } catch (error) {
+        try {
+          await client.query("ROLLBACK");
+        } catch {}
+        throw error;
       } finally {
         client.release();
       }
     });
 
-    if (!updated.rows[0]?.id) {
+    if (!result?.updated.rows[0]?.id) {
       return Response.json(
         { ok: false, error: "remesero_not_found" },
         { status: 404 },
       );
     }
 
-    return Response.json({ ok: true }, { status: 200 });
+    return Response.json(
+      {
+        ok: true,
+        adjustment: result.adjustment
+          ? {
+              ...result.adjustment,
+              debtBefore: Number(result.adjustment.debtBefore ?? 0),
+              debtAfter: Number(result.adjustment.debtAfter ?? 0),
+              adjustedAt: new Date(result.adjustment.adjustedAt).toISOString(),
+            }
+          : undefined,
+      },
+      { status: 200 },
+    );
   } catch (err: any) {
     if (err?.code === "23505") {
       return Response.json(

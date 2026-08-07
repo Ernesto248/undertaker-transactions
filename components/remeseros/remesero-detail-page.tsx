@@ -35,6 +35,7 @@ import type {
   RemeseroDetailData,
   RemeseroShareSummary,
 } from "@/lib/types";
+import { buildDetailMovementSummary } from "@/lib/remesero-ledger";
 import { cn } from "@/lib/utils";
 import {
   isDashboardTab,
@@ -109,55 +110,7 @@ function formatDateTime(value: string) {
 }
 
 function buildFilteredSummary(assignments: RemeseroDetailAssignment[]) {
-  const totalUsd = assignments.reduce((acc, row) => acc + row.amountUsd, 0);
-  const totalCup = assignments.reduce((acc, row) => acc + row.debtAmount, 0);
-
-  const grouped = new Map<
-    number,
-    {
-      txCount: number;
-      totalUsd: number;
-      totalCup: number;
-      amountsUsd: number[];
-    }
-  >();
-
-  const sorted = [...assignments].sort((a, b) =>
-    a.assignedAt.localeCompare(b.assignedAt),
-  );
-
-  for (const row of sorted) {
-    const current = grouped.get(row.priceApplied) ?? {
-      txCount: 0,
-      totalUsd: 0,
-      totalCup: 0,
-      amountsUsd: [],
-    };
-
-    current.txCount += 1;
-    current.totalUsd += row.amountUsd;
-    current.totalCup += row.debtAmount;
-    current.amountsUsd.push(row.amountUsd);
-
-    grouped.set(row.priceApplied, current);
-  }
-
-  const groups = Array.from(grouped.entries())
-    .map(([priceApplied, value]) => ({
-      priceApplied,
-      txCount: value.txCount,
-      totalUsd: value.totalUsd,
-      totalCup: value.totalCup,
-      amountsUsd: value.amountsUsd,
-    }))
-    .sort((a, b) => a.priceApplied - b.priceApplied);
-
-  return {
-    txCount: assignments.length,
-    totalUsd,
-    totalCup,
-    groups,
-  };
+  return buildDetailMovementSummary(assignments);
 }
 
 function SummaryMetric({
@@ -261,8 +214,8 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
           `/api/remeseros/${remeseroId}/detail`,
           window.location.origin,
         );
-        if (from) url.searchParams.set("from", from);
-        if (to) url.searchParams.set("to", to);
+        if (from !== undefined) url.searchParams.set("from", from ?? "");
+        if (to !== undefined) url.searchParams.set("to", to ?? "");
 
         const res = await fetch(url.toString(), { cache: "no-store" });
         if (!res.ok) {
@@ -431,40 +384,41 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
       const inicioType = summary.inicioDebt >= 0 ? "deuda" : "fondo";
       const finalType = summary.finalDebtType === "DEUDA" ? "deuda" : "fondo";
 
+      const movementGroups = summary.netGroups ?? summary.groups;
       const tiradoLines =
-        summary.groups.length === 0
-          ? ["Sin asignaciones desde el ultimo pago"]
-          : summary.groups.map((group) => {
+        movementGroups.length === 0
+          ? ["Sin movimientos desde el ultimo corte"]
+          : movementGroups.map((group) => {
               const amounts = group.amountsUsd
                 .map((amount) => formatLocalFlexible(amount))
                 .join(", ");
               return `${formatLocalFlexible(group.priceApplied)} (${amounts}) = ${formatLocalFlexible(group.totalUsd)} USD`;
             });
 
-      const lastPaymentLines =
-        summary.hasPaymentCut &&
-        summary.lastPaymentAmount !== null &&
-        summary.cutAt
-          ? [
-              `💳 Monto: $ ${formatLocalFlexible(summary.lastPaymentAmount)}`,
-              `🕒 Fecha y hora: ${formatDateTime(summary.cutAt)}`,
-            ]
-          : ["⚠️ Sin pagos registrados"];
+      const lastCutLines = summary.cutAt
+        ? [
+            summary.cutType === "PAYMENT" && summary.lastPaymentAmount !== null
+              ? `Monto pagado: $ ${formatLocalFlexible(summary.lastPaymentAmount)}`
+              : `Saldo establecido: $ ${formatLocalFlexible(Math.abs(summary.inicioDebt))} ${inicioType}`,
+            `Fecha y hora: ${formatDateTime(summary.cutAt)}`,
+            ...(summary.cutNote ? [`Nota: ${summary.cutNote}`] : []),
+          ]
+        : ["Sin cortes registrados"];
 
       const message = [
         `*👤 GESTOR:* ${summary.remeseroNombre}`,
         "",
-        "*🧾 ULTIMO PAGO*",
-        ...lastPaymentLines,
+        "*ULTIMO CORTE*",
+        ...lastCutLines,
         "",
         "*🚩 INICIO*",
         `💰 $ ${formatLocalFlexible(Math.abs(summary.inicioDebt))} ${inicioType}`,
         "",
-        "*📤 ZELLE TIRADO*",
+        "*MOVIMIENTOS NETOS*",
         ...tiradoLines,
         `🧮 Total USD: ${formatLocalFlexible(summary.totalTiradoUsd)} USD`,
         "",
-        "*📊 TOTAL TIRADO*",
+        "*TOTAL NETO*",
         `💵 $ ${formatLocalFlexible(summary.totalTiradoCup)}`,
         "",
         "*🏁 FINAL*",
@@ -621,10 +575,7 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
     detail.rangeOptions.find((option) => option.id === selectedRangeId) ??
     detail.rangeOptions[0] ??
     null;
-  const latestPayment =
-    detail.payments.find((payment) => payment.revertedAt === null) ??
-    detail.payments[0] ??
-    null;
+  const latestCut = detail.cuts?.[0] ?? null;
   const paymentsPreview = detail.payments.slice(0, 2);
   const visiblePayments = showAllPayments ? detail.payments : paymentsPreview;
   const activePaymentsCount = detail.payments.filter(
@@ -843,24 +794,30 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
                 </p>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <SummaryMetric
+                  icon={Wallet}
+                  label="Inicio tramo"
+                  value={formatLocal(detail.selectedRange.inicioDebt ?? 0)}
+                  hint="Saldo establecido por el corte anterior"
+                />
                 <SummaryMetric
                   icon={CircleDollarSign}
-                  label="Total tramo"
+                  label="Total neto"
                   value={formatLocal(detail.summary.totalCup)}
-                  hint="CUP acumulado del tramo activo"
+                  hint="Asignaciones menos desasignaciones"
                 />
                 <SummaryMetric
                   icon={TrendingUp}
-                  label="USD tramo"
+                  label="USD netos"
                   value={formatLocalFlexible(detail.summary.totalUsd)}
                   hint="Monto total en USD del corte"
                 />
                 <SummaryMetric
                   icon={ReceiptText}
-                  label="Asignaciones"
+                  label="Operaciones netas"
                   value={String(detail.summary.txCount)}
-                  hint="Operaciones registradas en el tramo"
+                  hint={`${detail.summary.movementCount ?? detail.assignments.length} movimientos visibles`}
                 />
               </div>
             </div>
@@ -874,16 +831,18 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
               <div className="mt-5 space-y-4">
                 <div>
                   <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                    Ultimo pago valido
+                    Ultimo corte valido
                   </p>
                   <p className="mt-2 text-2xl font-semibold tracking-tight">
-                    {latestPayment
-                      ? `$ ${formatLocalFlexible(latestPayment.amountPaid)}`
-                      : "Sin pagos"}
+                    {latestCut
+                      ? latestCut.type === "PAYMENT"
+                        ? `$ ${formatLocalFlexible(latestCut.amountPaid ?? 0)} pagados`
+                        : `$ ${formatLocalFlexible(Math.abs(latestCut.balanceAfter ?? 0))} de saldo`
+                      : "Sin cortes"}
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {latestPayment
-                      ? formatDateTime(latestPayment.paidAt)
+                    {latestCut
+                      ? `${latestCut.type === "PAYMENT" ? "Pago" : "Ajuste manual"} · ${formatDateTime(latestCut.cutAt)}`
                       : "Aun no se ha registrado un corte para este remesero."}
                   </p>
                 </div>
@@ -1070,11 +1029,11 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
                       Actividad del tramo
                     </div>
                     <CardTitle className="text-xl">
-                      Asignaciones visibles
+                      Historial de movimientos
                     </CardTitle>
                     <p className="max-w-2xl text-sm text-muted-foreground">
                       {hasFilters
-                        ? `Mostrando ${filteredSummary.txCount} de ${detail.summary.txCount} asignaciones del tramo seleccionado.`
+                        ? `Mostrando ${filteredAssignments.length} de ${detail.assignments.length} registros historicos del tramo seleccionado.`
                         : "Filtros y resultados integrados en una sola zona para reducir scroll y cambios de contexto."}
                     </p>
                   </div>
@@ -1095,10 +1054,10 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
               <CardContent className="space-y-5 px-4 py-5 md:px-6 md:py-6">
                 <div className="grid gap-3 xl:grid-cols-[minmax(250px,1.1fr)_minmax(180px,0.65fr)_minmax(240px,1fr)]">
                   <div className="space-y-2">
-                    <Label htmlFor="range">Tramo entre pagos</Label>
+                    <Label htmlFor="range">Tramo entre cortes</Label>
                     <select
                       id="range"
-                      title="Tramo entre pagos"
+                      title="Tramo entre cortes"
                       className={selectClassName}
                       value={selectedRangeId}
                       onChange={(event) =>
@@ -1145,7 +1104,7 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
                 <div className="grid gap-3 md:grid-cols-3">
                   <SummaryMetric
                     icon={TrendingUp}
-                    label="USD visibles"
+                    label="USD netos"
                     value={formatLocalFlexible(filteredSummary.totalUsd)}
                     hint={
                       hasFilters
@@ -1155,7 +1114,7 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
                   />
                   <SummaryMetric
                     icon={Wallet}
-                    label="CUP visibles"
+                    label="CUP netos"
                     value={formatLocal(filteredSummary.totalCup)}
                     hint={
                       hasFilters
@@ -1165,12 +1124,12 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
                   />
                   <SummaryMetric
                     icon={ReceiptText}
-                    label="Operaciones"
+                    label="Operaciones netas"
                     value={String(filteredSummary.txCount)}
                     hint={
                       hasFilters
-                        ? "Coincidencias despues del filtro"
-                        : "Asignaciones visibles"
+                        ? `${filteredAssignments.length} registros historicos filtrados`
+                        : `${filteredSummary.movementCount ?? filteredAssignments.length} movimientos visibles`
                     }
                   />
                 </div>
@@ -1209,6 +1168,13 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
                               >
                                 {row.isActive ? "Activa" : "Desasignada"}
                               </Badge>
+                              <Badge variant="outline">
+                                {row.netOperations === 1
+                                  ? "Suma al tramo"
+                                  : row.netOperations === -1
+                                    ? "Resta al tramo"
+                                    : "Efecto neto 0"}
+                              </Badge>
                             </div>
 
                             <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -1222,6 +1188,11 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
                             <p className="text-xs text-muted-foreground">
                               Asignada: {formatDateTime(row.assignedAt)}
                             </p>
+                            {row.unassignedAt ? (
+                              <p className="text-xs text-muted-foreground">
+                                Desasignada: {formatDateTime(row.unassignedAt)}
+                              </p>
+                            ) : null}
                           </div>
 
                           <div className="grid grid-cols-3 gap-2 md:min-w-[280px]">
@@ -1273,7 +1244,7 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
               <CardContent className="space-y-3 px-4 pb-5 md:px-5 md:pb-5">
                 {filteredSummary.groups.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    Sin asignaciones en este tramo.
+                    Sin movimientos en este tramo.
                   </p>
                 ) : (
                   filteredSummary.groups.map((group) => (

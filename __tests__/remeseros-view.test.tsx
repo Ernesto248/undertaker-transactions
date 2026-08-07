@@ -56,6 +56,7 @@ describe("RemeserosView debt editor", () => {
     await waitFor(() => {
       expect(onUpdateRemesero).toHaveBeenCalledWith("r-1", {
         deudaActual: -750.25,
+        deudaActualNote: "Ajuste manual desde la interfaz",
       });
     });
   });
@@ -95,6 +96,7 @@ describe("RemeserosView debt editor", () => {
     await waitFor(() => {
       expect(onUpdateRemesero).toHaveBeenCalledWith("r-1", {
         deudaActual: 0,
+        deudaActualNote: "Ajuste manual desde la interfaz",
       });
     });
   });

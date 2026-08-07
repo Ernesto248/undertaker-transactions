@@ -1,5 +1,10 @@
 import { getPool } from "@/lib/db";
-import type { RemeseroShareSummary } from "@/lib/types";
+import {
+  assignmentMovementEvents,
+  buildMagnitudeGroups,
+  buildMovementGroups,
+} from "@/lib/remesero-ledger";
+import type { RemeseroDetailAssignment, RemeseroShareSummary } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -12,12 +17,33 @@ function toNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function mapAssignmentRow(row: any): RemeseroDetailAssignment {
+  return {
+    assignmentId: String(row.assignmentId),
+    transactionId: String(row.transactionId),
+    senderName: "",
+    bank: null,
+    accountName: null,
+    confirmationCode: null,
+    transactionAmount: toNumber(row.amountUsd),
+    amountUsd: toNumber(row.amountUsd),
+    priceApplied: toNumber(row.priceApplied),
+    debtAmount: toNumber(row.debtAmount),
+    assignedAt: new Date(row.assignedAt).toISOString(),
+    unassignedAt:
+      row.unassignedAt === null || row.unassignedAt === undefined
+        ? null
+        : new Date(row.unassignedAt).toISOString(),
+    isActive: row.unassignedAt === null || row.unassignedAt === undefined,
+  };
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const resolvedParams = await params;
-  const id = idFromParams(resolvedParams);
+  const { id: rawId } = await params;
+  const id = idFromParams({ id: rawId });
 
   if (!id) {
     return Response.json({ ok: false, error: "invalid_id" }, { status: 400 });
@@ -44,121 +70,116 @@ export async function GET(
       );
     }
 
-    const lastPaymentResult = await client.query(
+    const latestCutResult = await client.query(
       `
-      SELECT
-        id,
-        amount_paid as "amountPaid",
-        deuda_despues_pago as "debtAfterPayment",
-        paid_at as "paidAt"
-      FROM remesero_payments
-      WHERE remesero_id = $1 AND reverted_at IS NULL
-      ORDER BY paid_at DESC
+      SELECT *
+      FROM (
+        SELECT
+          id,
+          'PAYMENT'::text as "cutType",
+          amount_paid as "amountPaid",
+          deuda_despues_pago as "balanceAfter",
+          note,
+          paid_at as "cutAt"
+        FROM remesero_payments
+        WHERE remesero_id = $1 AND reverted_at IS NULL
+
+        UNION ALL
+
+        SELECT
+          id,
+          'MANUAL'::text as "cutType",
+          NULL::numeric as "amountPaid",
+          debt_after as "balanceAfter",
+          note,
+          adjusted_at as "cutAt"
+        FROM remesero_debt_adjustments
+        WHERE remesero_id = $1
+      ) cuts
+      ORDER BY "cutAt" DESC
       LIMIT 1
       `,
       [id],
     );
 
-    const lastPayment = lastPaymentResult.rows[0] ?? null;
-    const cutAt: Date | null =
-      lastPayment?.paidAt === null || lastPayment?.paidAt === undefined
-        ? null
-        : new Date(lastPayment.paidAt);
+    const latestCut = latestCutResult.rows[0] ?? null;
+    const cutAt = latestCut?.cutAt ? new Date(latestCut.cutAt) : null;
 
-    const groupsResult = await client.query(
+    const assignmentsResult = await client.query(
       `
       SELECT
+        id as "assignmentId",
+        transaction_id as "transactionId",
+        amount_usd as "amountUsd",
         price_applied as "priceApplied",
-        ARRAY_AGG(amount_usd ORDER BY assigned_at) as "amountsUsd",
-        COUNT(*)::int as "txCount",
-        COALESCE(SUM(amount_usd), 0) as "totalUsd",
-        COALESCE(SUM(debt_amount), 0) as "totalCup"
+        debt_amount as "debtAmount",
+        assigned_at as "assignedAt",
+        unassigned_at as "unassignedAt"
       FROM remesero_transaction_assignments
       WHERE remesero_id = $1
-        AND unassigned_at IS NULL
-        AND ($2::timestamptz IS NULL OR assigned_at > $2::timestamptz)
-      GROUP BY price_applied
-      ORDER BY price_applied
+        AND (
+          $2::timestamptz IS NULL
+          OR assigned_at > $2::timestamptz
+          OR (unassigned_at IS NOT NULL AND unassigned_at > $2::timestamptz)
+        )
+      ORDER BY LEAST(assigned_at, COALESCE(unassigned_at, assigned_at)), id
       `,
       [id, cutAt],
     );
 
-    const groups = groupsResult.rows.map((row: any) => ({
-      priceApplied: toNumber(row.priceApplied),
-      amountsUsd: Array.isArray(row.amountsUsd)
-        ? row.amountsUsd.map((value: any) => toNumber(value))
-        : [],
-      txCount: toNumber(row.txCount),
-      totalUsd: toNumber(row.totalUsd),
-      totalCup: toNumber(row.totalCup),
-    }));
+    const range = { from: cutAt, to: null };
+    const events = assignmentsResult.rows
+      .map(mapAssignmentRow)
+      .flatMap((assignment) => assignmentMovementEvents(assignment, range));
 
-    const removedGroupsResult = await client.query(
-      `
-      SELECT
-        price_applied as "priceApplied",
-        ARRAY_AGG(amount_usd ORDER BY unassigned_at) as "amountsUsd",
-        COUNT(*)::int as "txCount",
-        COALESCE(SUM(amount_usd), 0) as "totalUsd",
-        COALESCE(SUM(debt_amount), 0) as "totalCup"
-      FROM remesero_transaction_assignments
-      WHERE remesero_id = $1
-        AND assigned_at <= $2::timestamptz
-        AND unassigned_at > $2::timestamptz
-      GROUP BY price_applied
-      ORDER BY price_applied
-      `,
-      [id, cutAt],
+    const groups = buildMagnitudeGroups(events, 1);
+    const removedGroups = buildMagnitudeGroups(events, -1);
+    const netGroups = buildMovementGroups(events);
+    const totalTiradoUsd = events.reduce(
+      (total, event) => total + event.direction * event.amountUsd,
+      0,
+    );
+    const totalTiradoCup = events.reduce(
+      (total, event) => total + event.direction * event.debtAmount,
+      0,
+    );
+    const netOperationCount = events.reduce(
+      (total, event) => total + event.direction,
+      0,
     );
 
-    const removedGroups = removedGroupsResult.rows.map((row: any) => ({
-      priceApplied: toNumber(row.priceApplied),
-      amountsUsd: Array.isArray(row.amountsUsd)
-        ? row.amountsUsd.map((value: any) => toNumber(value))
-        : [],
-      txCount: toNumber(row.txCount),
-      totalUsd: toNumber(row.totalUsd),
-      totalCup: toNumber(row.totalCup),
-    }));
+    let inicioDebt = latestCut?.id ? toNumber(latestCut.balanceAfter) : 0;
 
-    const addedTiradoUsd = groups.reduce((acc, row) => acc + row.totalUsd, 0);
-    const addedTiradoCup = groups.reduce((acc, row) => acc + row.totalCup, 0);
-    const removedUsd = removedGroups.reduce((acc, row) => acc + row.totalUsd, 0);
-    const removedCup = removedGroups.reduce((acc, row) => acc + row.totalCup, 0);
-
-    const totalTiradoUsd = addedTiradoUsd - removedUsd;
-    const totalTiradoCup = addedTiradoCup - removedCup;
-
-    let inicioDebt = toNumber(lastPayment?.debtAfterPayment);
-
-    // Fallback only for legacy rows created before debt snapshots were added.
-    if (lastPayment?.id && lastPayment?.debtAfterPayment == null) {
+    // Legacy payment rows may not have a captured post-payment balance.
+    if (latestCut?.id && latestCut.balanceAfter == null) {
       inicioDebt = toNumber(remesero.deudaActual) - totalTiradoCup;
     }
 
-    if (!lastPayment?.id) {
-      inicioDebt = 0;
-    }
-
     const finalDebt = inicioDebt + totalTiradoCup;
+    const cutType = latestCut?.cutType === "MANUAL" ? "MANUAL" : latestCut?.id ? "PAYMENT" : null;
 
     const summary: RemeseroShareSummary = {
       remeseroId: String(remesero.id),
       remeseroNombre: String(remesero.nombre),
       cutAt: cutAt ? cutAt.toISOString() : null,
-      hasPaymentCut: Boolean(lastPayment?.id),
+      cutType,
+      cutNote: latestCut?.note == null ? null : String(latestCut.note),
+      hasPaymentCut: cutType === "PAYMENT",
+      hasManualCut: cutType === "MANUAL",
       lastPaymentAmount:
-        lastPayment?.amountPaid === null ||
-        lastPayment?.amountPaid === undefined
-          ? null
-          : toNumber(lastPayment.amountPaid),
+        cutType === "PAYMENT" && latestCut.amountPaid != null
+          ? toNumber(latestCut.amountPaid)
+          : null,
       inicioDebt,
       totalTiradoUsd,
       totalTiradoCup,
       finalDebt,
       finalDebtType: finalDebt >= 0 ? "DEUDA" : "FONDO",
+      netOperationCount,
+      movementCount: events.length,
       groups,
       removedGroups,
+      netGroups,
     };
 
     return Response.json({ ok: true, summary }, { status: 200 });

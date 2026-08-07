@@ -55,27 +55,54 @@ export type RemeseroPayment = {
   revertedReason: string | null;
 };
 
+export type RemeseroDebtAdjustment = {
+  id: string;
+  remeseroId: string;
+  debtBefore: number;
+  debtAfter: number;
+  note: string | null;
+  adjustedAt: string;
+};
+
+export type RemeseroCutType = "PAYMENT" | "MANUAL";
+
+export type RemeseroCut = {
+  id: string;
+  type: RemeseroCutType;
+  cutAt: string;
+  balanceAfter: number | null;
+  amountPaid: number | null;
+  note: string | null;
+};
+
 export type RemeseroShareSummaryGroup = {
   priceApplied: number;
   amountsUsd: number[];
   txCount: number;
   totalUsd: number;
   totalCup: number;
+  movementCount?: number;
 };
 
 export type RemeseroShareSummary = {
   remeseroId: string;
   remeseroNombre: string;
   cutAt: string | null;
+  cutType?: RemeseroCutType | null;
+  cutNote?: string | null;
   hasPaymentCut: boolean;
+  hasManualCut?: boolean;
   lastPaymentAmount: number | null;
   inicioDebt: number;
   totalTiradoUsd: number;
   totalTiradoCup: number;
   finalDebt: number;
   finalDebtType: "DEUDA" | "FONDO";
+  netOperationCount?: number;
+  movementCount?: number;
   groups: RemeseroShareSummaryGroup[];
   removedGroups: RemeseroShareSummaryGroup[];
+  netGroups?: RemeseroShareSummaryGroup[];
 };
 
 export type RemeseroDetailRangeOption = {
@@ -83,6 +110,8 @@ export type RemeseroDetailRangeOption = {
   label: string;
   from: string | null;
   to: string | null;
+  cutType?: RemeseroCutType | null;
+  inicioDebt?: number;
 };
 
 export type RemeseroDetailAssignment = {
@@ -99,6 +128,12 @@ export type RemeseroDetailAssignment = {
   assignedAt: string;
   unassignedAt: string | null;
   isActive: boolean;
+  assignedInRange?: boolean;
+  unassignedInRange?: boolean;
+  movementCount?: number;
+  netOperations?: number;
+  netAmountUsd?: number;
+  netDebtAmount?: number;
 };
 
 export type RemeseroDetailSummaryGroup = {
@@ -107,10 +142,12 @@ export type RemeseroDetailSummaryGroup = {
   totalUsd: number;
   totalCup: number;
   amountsUsd: number[];
+  movementCount?: number;
 };
 
 export type RemeseroDetailSummary = {
   txCount: number;
+  movementCount?: number;
   totalUsd: number;
   totalCup: number;
   groups: RemeseroDetailSummaryGroup[];
@@ -119,10 +156,14 @@ export type RemeseroDetailSummary = {
 export type RemeseroDetailData = {
   remesero: Remesero;
   payments: RemeseroPayment[];
+  adjustments?: RemeseroDebtAdjustment[];
+  cuts?: RemeseroCut[];
   rangeOptions: RemeseroDetailRangeOption[];
   selectedRange: {
     from: string | null;
     to: string | null;
+    inicioDebt?: number;
+    cutType?: RemeseroCutType | null;
   };
   summary: RemeseroDetailSummary;
   assignments: RemeseroDetailAssignment[];
