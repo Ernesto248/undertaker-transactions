@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { getPool } from "@/lib/db";
+import { ACTIVE_DEBT_DELTA_SQL, roundMoney } from "@/lib/finance-ledger";
 import type { AccountBalance } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -10,9 +12,8 @@ const OptionalStringSchema = z.preprocess((value) => {
   return value;
 }, z.string().trim().optional());
 
-const CreateAccountMovementSchema = z.object({
+const MovementBaseSchema = z.object({
   accountId: z.string().uuid(),
-  movementType: z.enum(["wire", "expense"]),
   amount: z
     .union([z.number(), z.string().trim()])
     .transform((value) => (typeof value === "string" ? Number(value) : value))
@@ -21,6 +22,28 @@ const CreateAccountMovementSchema = z.object({
       "amount must be > 0",
     ),
   note: OptionalStringSchema,
+});
+
+const CreateAccountMovementSchema = MovementBaseSchema.extend({
+  movementType: z.enum(["wire", "expense"]),
+  counterpartyId: z.string().uuid().optional(),
+  settlementCurrency: z.enum(["USD", "CUP"]).optional(),
+  conversionRate: z.number().finite().positive().optional(),
+  feePercent: z.number().finite().min(0).optional(),
+}).superRefine((value, context) => {
+  if (value.movementType !== "wire") return;
+  if (!value.counterpartyId) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["counterpartyId"], message: "counterpartyId is required" });
+  }
+  if (!value.settlementCurrency) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["settlementCurrency"], message: "settlementCurrency is required" });
+  }
+  if (value.settlementCurrency === "CUP" && value.conversionRate === undefined) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["conversionRate"], message: "conversionRate is required" });
+  }
+  if (value.settlementCurrency === "USD" && value.feePercent === undefined) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["feePercent"], message: "feePercent is required" });
+  }
 });
 
 function mapAccountRow(row: any): AccountBalance {
@@ -149,27 +172,88 @@ export async function POST(request: Request) {
   const client = await getPool().connect();
 
   try {
-    const inserted = await client.query(
-      `
-      INSERT INTO account_outflow_movements
-        (gmail_account_id, movement_type, amount, note)
-      VALUES
-        ($1, $2, $3, $4)
-      RETURNING id
-      `,
+    await client.query("BEGIN");
+    const movementId = randomUUID();
+    let debtAmount: number | null = null;
+    let financeDebtMovementId: string | null = null;
+
+    if (parsed.data.movementType === "wire") {
+      const counterpartyResult = await client.query(
+        `SELECT id FROM finance_counterparties
+         WHERE id = $1 AND archived_at IS NULL FOR UPDATE`,
+        [parsed.data.counterpartyId],
+      );
+      if (!counterpartyResult.rows[0]?.id) {
+        await client.query("ROLLBACK");
+        return Response.json({ ok: false, error: "counterparty_not_found" }, { status: 404 });
+      }
+
+      debtAmount = roundMoney(
+        parsed.data.settlementCurrency === "CUP"
+          ? parsed.data.amount * (parsed.data.conversionRate ?? 0)
+          : parsed.data.amount * (1 + (parsed.data.feePercent ?? 0) / 100),
+      );
+    }
+
+    if (parsed.data.movementType === "wire" && debtAmount !== null) {
+      const balanceResult = await client.query(
+        `SELECT COALESCE(SUM(${ACTIVE_DEBT_DELTA_SQL}), 0) as balance
+         FROM finance_debt_movements
+         WHERE counterparty_id = $1 AND currency = $2 AND reverted_at IS NULL`,
+        [parsed.data.counterpartyId, parsed.data.settlementCurrency],
+      );
+      const balanceBefore = Number(balanceResult.rows[0]?.balance ?? 0);
+      const balanceAfter = roundMoney(balanceBefore + debtAmount);
+      const debtResult = await client.query(
+        `INSERT INTO finance_debt_movements
+           (counterparty_id, currency, movement_type, amount, signed_delta,
+            balance_before, balance_after, note, source_type, source_id)
+         VALUES ($1, $2, 'RECEIVABLE', $3, $3, $4, $5, $6, 'WIRE', $7)
+         RETURNING id`,
+        [
+          parsed.data.counterpartyId,
+          parsed.data.settlementCurrency,
+          debtAmount,
+          balanceBefore,
+          balanceAfter,
+          parsed.data.note ?? "Wire",
+          movementId,
+        ],
+      );
+      financeDebtMovementId = String(debtResult.rows[0].id);
+    }
+
+    await client.query(
+      `INSERT INTO account_outflow_movements
+         (id, gmail_account_id, movement_type, amount, note, counterparty_id,
+          settlement_currency, conversion_rate, fee_percent, debt_amount,
+          finance_debt_movement_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [
+        movementId,
         parsed.data.accountId,
         parsed.data.movementType,
         parsed.data.amount,
         parsed.data.note ?? null,
+        parsed.data.movementType === "wire" ? parsed.data.counterpartyId : null,
+        parsed.data.movementType === "wire" ? parsed.data.settlementCurrency : null,
+        parsed.data.movementType === "wire" && parsed.data.settlementCurrency === "CUP"
+          ? parsed.data.conversionRate : null,
+        parsed.data.movementType === "wire" && parsed.data.settlementCurrency === "USD"
+          ? parsed.data.feePercent : null,
+        debtAmount,
+        financeDebtMovementId,
       ],
     );
 
+    await client.query("COMMIT");
+
     return Response.json(
-      { ok: true, movementId: inserted.rows[0]?.id ?? null },
+      { ok: true, movementId, financeDebtMovementId, debtAmount },
       { status: 201 },
     );
   } catch (err: any) {
+    try { await client.query("ROLLBACK"); } catch {}
     if (err?.code === "23503") {
       return Response.json(
         { ok: false, error: "account_not_found" },
@@ -209,27 +293,49 @@ export async function DELETE(request: Request) {
   const client = await getPool().connect();
 
   try {
-    const result = await client.query(
-      `
-      UPDATE account_outflow_movements
-      SET
-        reverted_at = now(),
-        reverted_reason = COALESCE($2, reverted_reason),
-        updated_at = now()
-      WHERE id = $1 AND reverted_at IS NULL
-      RETURNING id
-      `,
-      [parsed.data.movementId, parsed.data.reason ?? null],
+    await client.query("BEGIN");
+    const currentResult = await client.query(
+      `SELECT id, finance_debt_movement_id as "financeDebtMovementId"
+       FROM account_outflow_movements
+       WHERE id = $1 AND reverted_at IS NULL FOR UPDATE`,
+      [parsed.data.movementId],
     );
+    const current = currentResult.rows[0];
 
-    if (!result.rows[0]?.id) {
+    if (!current?.id) {
+      await client.query("ROLLBACK");
       return Response.json(
         { ok: false, error: "movement_not_found_or_already_reverted" },
         { status: 404 },
       );
     }
 
+    if (current.financeDebtMovementId) {
+      const debtResult = await client.query(
+        `UPDATE finance_debt_movements
+         SET reverted_at = now(), reverted_reason = $2, updated_at = now()
+         WHERE id = $1 AND reverted_at IS NULL AND source_type = 'WIRE'
+         RETURNING id`,
+        [current.financeDebtMovementId, parsed.data.reason ?? "Wire revertido"],
+      );
+      if (!debtResult.rows[0]?.id) {
+        await client.query("ROLLBACK");
+        return Response.json({ ok: false, error: "linked_debt_already_reverted" }, { status: 409 });
+      }
+    }
+
+    await client.query(
+      `UPDATE account_outflow_movements
+       SET reverted_at = now(), reverted_reason = COALESCE($2, reverted_reason), updated_at = now()
+       WHERE id = $1`,
+      [parsed.data.movementId, parsed.data.reason ?? null],
+    );
+    await client.query("COMMIT");
+
     return Response.json({ ok: true }, { status: 200 });
+  } catch {
+    try { await client.query("ROLLBACK"); } catch {}
+    return Response.json({ ok: false, error: "server_error" }, { status: 500 });
   } finally {
     client.release();
   }

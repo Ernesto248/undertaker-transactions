@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,11 +13,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { formatFinanceNumberInput, parseFinanceNumberInput } from "@/lib/finances";
 import type {
   AccountBalance,
   AccountMovement,
   AccountMovementType,
+  FinanceCurrency,
 } from "@/lib/types";
+
+type AccountMovementInput = {
+  movementType: AccountMovementType;
+  amount: number;
+  note?: string;
+  counterpartyId?: string;
+  settlementCurrency?: FinanceCurrency;
+  conversionRate?: number;
+  feePercent?: number;
+};
 
 type AccountsViewProps = {
   accounts: AccountBalance[];
@@ -28,7 +40,7 @@ type AccountsViewProps = {
   onLoadMovements: (accountId: string) => Promise<void>;
   onCreateMovement: (
     accountId: string,
-    input: { movementType: AccountMovementType; amount: number; note?: string },
+    input: AccountMovementInput,
   ) => Promise<void>;
   onRevertMovement: (
     accountId: string,
@@ -57,9 +69,31 @@ export function AccountsView({
   const [draftByAccount, setDraftByAccount] = useState<
     Record<
       string,
-      { movementType: AccountMovementType; amount: string; note: string }
+      {
+        movementType: AccountMovementType;
+        amount: string;
+        note: string;
+        counterpartyId: string;
+        settlementCurrency: FinanceCurrency;
+        conversionRate: string;
+        feePercent: string;
+      }
     >
   >({});
+  const [counterparties, setCounterparties] = useState<Array<{ id: string; name: string }>>([]);
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/finances/counterparties", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((payload) => {
+        if (active && payload?.ok && Array.isArray(payload.counterparties)) {
+          setCounterparties(payload.counterparties);
+        }
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
 
   const totals = useMemo(() => {
     const totalBalance = accounts.reduce(
@@ -98,6 +132,10 @@ export function AccountsView({
         movementType: "wire",
         amount: "",
         note: "",
+        counterpartyId: "",
+        settlementCurrency: "CUP",
+        conversionRate: "",
+        feePercent: "",
       }
     );
   };
@@ -113,9 +151,14 @@ export function AccountsView({
 
   const handleCreateMovement = async (accountId: string) => {
     const draft = getDraft(accountId);
-    const amount = Number(draft.amount);
+    const amount = parseFinanceNumberInput(draft.amount);
 
     if (!Number.isFinite(amount) || amount <= 0) return;
+    if (draft.movementType === "wire" && !draft.counterpartyId) return;
+    const conversionRate = parseFinanceNumberInput(draft.conversionRate);
+    const feePercent = parseFinanceNumberInput(draft.feePercent);
+    if (draft.movementType === "wire" && draft.settlementCurrency === "CUP" && (!Number.isFinite(conversionRate) || conversionRate <= 0)) return;
+    if (draft.movementType === "wire" && draft.settlementCurrency === "USD" && (!Number.isFinite(feePercent) || feePercent < 0)) return;
 
     setLoadingByAccount((prev) => ({ ...prev, [accountId]: true }));
 
@@ -124,6 +167,12 @@ export function AccountsView({
         movementType: draft.movementType,
         amount,
         note: draft.note.trim() || undefined,
+        ...(draft.movementType === "wire" ? {
+          counterpartyId: draft.counterpartyId,
+          settlementCurrency: draft.settlementCurrency,
+          conversionRate: draft.settlementCurrency === "CUP" ? conversionRate : undefined,
+          feePercent: draft.settlementCurrency === "USD" ? feePercent : undefined,
+        } : {}),
       });
       setDraftByAccount((prev) => ({
         ...prev,
@@ -131,6 +180,10 @@ export function AccountsView({
           movementType: "wire",
           amount: "",
           note: "",
+          counterpartyId: "",
+          settlementCurrency: "CUP",
+          conversionRate: "",
+          feePercent: "",
         },
       }));
     } finally {
@@ -224,6 +277,16 @@ export function AccountsView({
         {accounts.map((account) => {
           const isExpanded = expandedById[account.id] === true;
           const draft = getDraft(account.id);
+          const draftAmount = parseFinanceNumberInput(draft.amount);
+          const draftRate = parseFinanceNumberInput(draft.conversionRate);
+          const draftPercent = parseFinanceNumberInput(draft.feePercent);
+          const debtPreview = draft.movementType === "wire" && Number.isFinite(draftAmount) && draftAmount > 0
+            ? draft.settlementCurrency === "CUP" && Number.isFinite(draftRate) && draftRate > 0
+              ? draftAmount * draftRate
+              : draft.settlementCurrency === "USD" && Number.isFinite(draftPercent) && draftPercent >= 0
+                ? draftAmount * (1 + draftPercent / 100)
+                : null
+            : null;
           const movements = movementsByAccount[account.id] ?? [];
           const loadingMovements =
             loadingMovementsByAccount[account.id] === true;
@@ -293,7 +356,7 @@ export function AccountsView({
                     <p className="text-sm font-medium text-foreground">
                       Registrar salida
                     </p>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">
                           Tipo
@@ -324,9 +387,6 @@ export function AccountsView({
                           Monto
                         </Label>
                         <Input
-                          type="number"
-                          min="0.01"
-                          step="0.01"
                           inputMode="decimal"
                           value={draft.amount}
                           onChange={(event) =>
@@ -334,7 +394,7 @@ export function AccountsView({
                               ...prev,
                               [account.id]: {
                                 ...draft,
-                                amount: event.target.value,
+                                amount: formatFinanceNumberInput(event.target.value),
                               },
                             }))
                           }
@@ -342,6 +402,30 @@ export function AccountsView({
                           className="bg-secondary border-border"
                         />
                       </div>
+                      {draft.movementType === "wire" ? (
+                        <>
+                          <div className="space-y-1">
+                            <Label className="text-xs text-muted-foreground">Persona</Label>
+                            <Select value={draft.counterpartyId} onValueChange={(value) => setDraftByAccount((prev) => ({ ...prev, [account.id]: { ...draft, counterpartyId: value } }))}>
+                              <SelectTrigger className="bg-secondary border-border"><SelectValue placeholder="Selecciona" /></SelectTrigger>
+                              <SelectContent className="bg-card border-border">
+                                {counterparties.map((counterparty) => <SelectItem key={counterparty.id} value={counterparty.id}>{counterparty.name}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs text-muted-foreground">Deuda en</Label>
+                            <Select value={draft.settlementCurrency} onValueChange={(value) => setDraftByAccount((prev) => ({ ...prev, [account.id]: { ...draft, settlementCurrency: value as FinanceCurrency } }))}>
+                              <SelectTrigger className="bg-secondary border-border"><SelectValue /></SelectTrigger>
+                              <SelectContent className="bg-card border-border"><SelectItem value="CUP">CUP</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs text-muted-foreground">{draft.settlementCurrency === "CUP" ? "Tasa CUP/USD" : "Porcentaje"}</Label>
+                            <Input inputMode="decimal" value={draft.settlementCurrency === "CUP" ? draft.conversionRate : draft.feePercent} onChange={(event) => setDraftByAccount((prev) => ({ ...prev, [account.id]: { ...draft, [draft.settlementCurrency === "CUP" ? "conversionRate" : "feePercent"]: formatFinanceNumberInput(event.target.value) } }))} placeholder={draft.settlementCurrency === "CUP" ? "700" : "5"} className="bg-secondary border-border" />
+                          </div>
+                        </>
+                      ) : null}
                       <div className="space-y-1 md:col-span-2">
                         <Label className="text-xs text-muted-foreground">
                           Nota (opcional)
@@ -362,6 +446,11 @@ export function AccountsView({
                         />
                       </div>
                     </div>
+                    {debtPreview !== null ? (
+                      <p className="rounded-lg bg-secondary/40 px-3 py-2 text-sm text-muted-foreground">
+                        Se creará una cuenta por cobrar de <strong className="text-foreground">{formatLocal(debtPreview)} {draft.settlementCurrency}</strong>.
+                      </p>
+                    ) : null}
                     <Button
                       type="button"
                       onClick={() => handleCreateMovement(account.id)}
@@ -410,6 +499,13 @@ export function AccountsView({
                               {movement.note}
                             </p>
                           )}
+                          {movement.financeDebtMovementId ? (
+                            <p className="text-xs text-muted-foreground">
+                              {movement.counterpartyName} te debe {formatLocal(movement.debtAmount ?? 0)} {movement.settlementCurrency}
+                              {movement.conversionRate != null ? ` · Tasa ${formatLocal(movement.conversionRate)}` : ""}
+                              {movement.feePercent != null ? ` · ${formatLocal(movement.feePercent)}%` : ""}
+                            </p>
+                          ) : null}
 
                           {movement.revertedAt ? (
                             <p className="text-xs text-amber-500">

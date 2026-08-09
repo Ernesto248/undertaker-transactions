@@ -161,6 +161,7 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
 
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentNote, setPaymentNote] = useState("");
+  const [cashCup, setCashCup] = useState<number | null>(null);
   const [creatingPayment, setCreatingPayment] = useState(false);
   const [revertingById, setRevertingById] = useState<Record<string, boolean>>(
     {},
@@ -173,6 +174,15 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
 
   const queueRemeserosReturn = useCallback(() => {
     queueDashboardReturnTab("remeseros");
+  }, []);
+
+  const loadCashCup = useCallback(async () => {
+    try {
+      const response = await fetch("/api/finances", { cache: "no-store" });
+      if (!response.ok) return;
+      const payload = await response.json();
+      if (payload?.overview?.settings) setCashCup(Number(payload.overview.settings.cashCup));
+    } catch {}
   }, []);
 
   const navigateToDashboardTab = useCallback(
@@ -253,7 +263,8 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
 
   useEffect(() => {
     void loadDetail(undefined, undefined, true);
-  }, [loadDetail]);
+    void loadCashCup();
+  }, [loadCashCup, loadDetail]);
 
   useEffect(() => {
     if (!detail) return;
@@ -338,7 +349,7 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
       setPaymentNote("");
 
       const currentRange = resolveCurrentRange();
-      await loadDetail(currentRange.from, currentRange.to, false);
+      await Promise.all([loadDetail(currentRange.from, currentRange.to, false), loadCashCup()]);
     } finally {
       setCreatingPayment(false);
     }
@@ -357,7 +368,7 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
       if (!res.ok) return;
 
       const currentRange = resolveCurrentRange();
-      await loadDetail(currentRange.from, currentRange.to, false);
+      await Promise.all([loadDetail(currentRange.from, currentRange.to, false), loadCashCup()]);
     } finally {
       setRevertingById((prev) => ({ ...prev, [paymentId]: false }));
     }
@@ -892,7 +903,7 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
               <CardContent className="space-y-4 px-4 pb-5 md:px-6 md:pb-6">
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
                   <div className="space-y-2">
-                    <Label htmlFor="new-payment">Monto pagado</Label>
+                    <Label htmlFor="new-payment">Monto pagado (CUP)</Label>
                     <Input
                       id="new-payment"
                       inputMode="numeric"
@@ -915,6 +926,13 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
                     />
                   </div>
                 </div>
+                {cashCup !== null && Number(String(paymentAmount).replace(/,/g, "")) > 0 ? (
+                  <p className="rounded-lg bg-secondary/40 px-3 py-2 text-sm text-muted-foreground">
+                    Efectivo CUP: {formatLocalFlexible(cashCup)} → {formatLocalFlexible(cashCup - Number(String(paymentAmount).replace(/,/g, "")))}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">El pago se descontará del efectivo CUP.</p>
+                )}
                 <Button
                   type="button"
                   onClick={handleCreatePayment}

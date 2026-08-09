@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, List, Wallet, Users } from "lucide-react";
+import { Landmark, LayoutDashboard, List, Wallet, Users } from "lucide-react";
 
 interface DesktopNavProps {
   activeTab: string;
@@ -13,6 +13,7 @@ const navItems = [
   { id: "transactions", label: "Transacciones", icon: List },
   { id: "accounts", label: "Cuentas", icon: Wallet },
   { id: "remeseros", label: "Remeseros", icon: Users },
+  { id: "finances", label: "Finanzas", icon: Landmark },
 ];
 
 export function DesktopNav({ activeTab, setActiveTab }: DesktopNavProps) {

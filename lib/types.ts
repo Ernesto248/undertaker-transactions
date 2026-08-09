@@ -53,6 +53,9 @@ export type RemeseroPayment = {
   paidAt: string;
   revertedAt: string | null;
   revertedReason: string | null;
+  cashMovementId?: string | null;
+  cashCupBefore?: number | null;
+  cashCupAfter?: number | null;
 };
 
 export type RemeseroDebtAdjustment = {
@@ -190,4 +193,133 @@ export type AccountMovement = {
   createdAt: string;
   revertedAt: string | null;
   revertedReason: string | null;
+  counterpartyId?: string | null;
+  counterpartyName?: string | null;
+  settlementCurrency?: FinanceCurrency | null;
+  conversionRate?: number | null;
+  feePercent?: number | null;
+  debtAmount?: number | null;
+  financeDebtMovementId?: string | null;
+};
+
+export type FinanceCurrency = "USD" | "CUP";
+
+export type FinanceMovementType =
+  | "RECEIVABLE"
+  | "RECEIVED"
+  | "PAYABLE"
+  | "PAID"
+  | "SET_RECEIVABLE"
+  | "SET_PAYABLE";
+
+export type FinanceSettings = {
+  cashUsd: number;
+  cashCup: number;
+  usdCupRate: number | null;
+  updatedAt: string;
+};
+
+export type FinanceSettingChange = {
+  id: string;
+  fieldName: "cashUsd" | "cashCup" | "usdCupRate";
+  previousValue: number | null;
+  newValue: number | null;
+  note: string | null;
+  changedAt: string;
+};
+
+export type FinanceExpense = {
+  id: string;
+  currency: FinanceCurrency;
+  amount: number;
+  description: string;
+  balanceBefore: number;
+  balanceAfter: number;
+  occurredAt: string;
+};
+
+export type FinanceDebtMovement = {
+  id: string;
+  counterpartyId: string;
+  currency: FinanceCurrency;
+  movementType: FinanceMovementType;
+  amount: number;
+  signedAmount: number;
+  note: string | null;
+  occurredAt: string;
+  revertedAt: string | null;
+  revertedReason: string | null;
+  balanceBefore?: number | null;
+  balanceAfter?: number | null;
+  cashMovementId?: string | null;
+  sourceType?: "WIRE" | null;
+  sourceId?: string | null;
+};
+
+export type FinanceCashMovement = {
+  id: string;
+  currency: FinanceCurrency;
+  signedAmount: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  operationType: "EXTERNAL_DEBT" | "REMESERO_PAYMENT" | "CURRENCY_EXCHANGE";
+  operationId: string;
+  reversalOfId: string | null;
+  note: string | null;
+  occurredAt: string;
+};
+
+export type FinanceExchangeDirection = "USD_TO_CUP" | "CUP_TO_USD";
+
+export type FinanceCurrencyExchange = {
+  id: string;
+  direction: FinanceExchangeDirection;
+  sourceAmount: number;
+  rate: number;
+  targetAmount: number;
+  note: string | null;
+  occurredAt: string;
+  revertedAt: string | null;
+  revertedReason: string | null;
+};
+
+export type FinanceCounterparty = {
+  id: string;
+  name: string;
+  balanceUsd: number;
+  balanceCup: number;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  movements: FinanceDebtMovement[];
+};
+
+export type FinanceOverviewTotals = {
+  zelleUsd: number;
+  remeseros: {
+    receivableCup: number;
+    payableCup: number;
+    netCup: number;
+    netUsd: number | null;
+  };
+  external: {
+    receivableUsd: number;
+    payableUsd: number;
+    netUsd: number;
+    receivableCup: number;
+    payableCup: number;
+    netCup: number;
+    netCupUsd: number | null;
+  };
+  capitalTotalUsd: number | null;
+};
+
+export type FinanceOverview = {
+  settings: FinanceSettings;
+  totals: FinanceOverviewTotals;
+  counterparties: FinanceCounterparty[];
+  settingChanges: FinanceSettingChange[];
+  expenses: FinanceExpense[];
+  cashMovements: FinanceCashMovement[];
+  exchanges: FinanceCurrencyExchange[];
 };

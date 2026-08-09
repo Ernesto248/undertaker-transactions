@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getPool } from "@/lib/db";
+import { appendCashMovement, reverseCashMovement } from "@/lib/finance-ledger";
 import type { RemeseroPayment } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -45,6 +46,9 @@ function mapPaymentRow(row: any): RemeseroPayment {
       row.revertedReason === null || row.revertedReason === undefined
         ? null
         : String(row.revertedReason),
+    cashMovementId: row.cashMovementId == null ? null : String(row.cashMovementId),
+    cashCupBefore: row.cashCupBefore == null ? null : Number(row.cashCupBefore),
+    cashCupAfter: row.cashCupAfter == null ? null : Number(row.cashCupAfter),
   };
 }
 
@@ -62,8 +66,6 @@ export async function GET(
   const client = await getPool().connect();
 
   try {
-    await client.query("BEGIN");
-
     const remesero = await client.query(
       `
       SELECT id
@@ -85,18 +87,22 @@ export async function GET(
     const result = await client.query(
       `
       SELECT
-        id,
-        remesero_id as "remeseroId",
-        amount_paid as "amountPaid",
-        deuda_antes_pago as "debtBeforePayment",
-        deuda_despues_pago as "debtAfterPayment",
-        note,
-        paid_at as "paidAt",
-        reverted_at as "revertedAt",
-        reverted_reason as "revertedReason"
-      FROM remesero_payments
-      WHERE remesero_id = $1
-      ORDER BY paid_at DESC
+        payment.id,
+        payment.remesero_id as "remeseroId",
+        payment.amount_paid as "amountPaid",
+        payment.deuda_antes_pago as "debtBeforePayment",
+        payment.deuda_despues_pago as "debtAfterPayment",
+        payment.note,
+        payment.paid_at as "paidAt",
+        payment.reverted_at as "revertedAt",
+        payment.reverted_reason as "revertedReason",
+        payment.cash_movement_id as "cashMovementId",
+        cash.balance_before as "cashCupBefore",
+        cash.balance_after as "cashCupAfter"
+      FROM remesero_payments payment
+      LEFT JOIN finance_cash_movements cash ON cash.id = payment.cash_movement_id
+      WHERE payment.remesero_id = $1
+      ORDER BY payment.paid_at DESC
       `,
       [id],
     );
@@ -180,7 +186,8 @@ export async function POST(
         note,
         paid_at as "paidAt",
         reverted_at as "revertedAt",
-        reverted_reason as "revertedReason"
+        reverted_reason as "revertedReason",
+        cash_movement_id as "cashMovementId"
       `,
       [
         id,
@@ -192,7 +199,20 @@ export async function POST(
       ],
     );
 
-    const payment = mapPaymentRow(inserted.rows[0]);
+    const paymentRow = inserted.rows[0];
+
+    const cashMovement = await appendCashMovement(client, {
+      currency: "CUP",
+      signedAmount: -parsed.data.amountPaid,
+      operationType: "REMESERO_PAYMENT",
+      operationId: String(paymentRow.id),
+      note: parsed.data.note ?? `Pago a remesero ${id}`,
+      occurredAt: paidAt,
+    });
+    await client.query(
+      `UPDATE remesero_payments SET cash_movement_id = $1 WHERE id = $2`,
+      [cashMovement.id, paymentRow.id],
+    );
 
     await client.query(
       `
@@ -205,7 +225,15 @@ export async function POST(
 
     await client.query("COMMIT");
 
-    return Response.json({ ok: true, payment }, { status: 201 });
+    return Response.json({
+      ok: true,
+      payment: mapPaymentRow({
+        ...paymentRow,
+        cashMovementId: cashMovement.id,
+        cashCupBefore: cashMovement.balanceBefore,
+        cashCupAfter: cashMovement.balanceAfter,
+      }),
+    }, { status: 201 });
   } catch {
     try {
       await client.query("ROLLBACK");
@@ -248,12 +276,9 @@ export async function DELETE(
   try {
     await client.query("BEGIN");
 
-    const updated = await client.query(
+    const currentResult = await client.query(
       `
-      UPDATE remesero_payments
-      SET reverted_at = now(), reverted_reason = $3
-      WHERE id = $1 AND remesero_id = $2 AND reverted_at IS NULL
-      RETURNING
+      SELECT
         id,
         remesero_id as "remeseroId",
         amount_paid as "amountPaid",
@@ -262,12 +287,17 @@ export async function DELETE(
         note,
         paid_at as "paidAt",
         reverted_at as "revertedAt",
-        reverted_reason as "revertedReason"
+        reverted_reason as "revertedReason",
+        cash_movement_id as "cashMovementId"
+      FROM remesero_payments
+      WHERE id = $1 AND remesero_id = $2 AND reverted_at IS NULL
+      FOR UPDATE
       `,
-      [parsed.data.paymentId, id, parsed.data.reason ?? null],
+      [parsed.data.paymentId, id],
     );
 
-    if (!updated.rows[0]?.id) {
+    const current = currentResult.rows[0];
+    if (!current?.id) {
       await client.query("ROLLBACK");
       return Response.json(
         { ok: false, error: "payment_not_found_or_already_reverted" },
@@ -275,13 +305,37 @@ export async function DELETE(
       );
     }
 
+    if (current.cashMovementId) {
+      const reversal = await reverseCashMovement(client, {
+        cashMovementId: String(current.cashMovementId),
+        reason: parsed.data.reason ?? "Reversión de pago a remesero",
+      });
+      if (!reversal) {
+        await client.query("ROLLBACK");
+        return Response.json({ ok: false, error: "cash_movement_already_reverted" }, { status: 409 });
+      }
+    }
+
+    const updated = await client.query(
+      `UPDATE remesero_payments
+       SET reverted_at = now(), reverted_reason = $3
+       WHERE id = $1 AND remesero_id = $2
+       RETURNING id, remesero_id as "remeseroId", amount_paid as "amountPaid",
+                 deuda_antes_pago as "debtBeforePayment",
+                 deuda_despues_pago as "debtAfterPayment", note,
+                 paid_at as "paidAt", reverted_at as "revertedAt",
+                 reverted_reason as "revertedReason",
+                 cash_movement_id as "cashMovementId"`,
+      [parsed.data.paymentId, id, parsed.data.reason ?? null],
+    );
+
     await client.query(
       `
       UPDATE remeseros
       SET deuda_actual = deuda_actual + $1, updated_at = now()
       WHERE id = $2
       `,
-      [Number(updated.rows[0].amountPaid ?? 0), id],
+      [Number(current.amountPaid ?? 0), id],
     );
 
     await client.query("COMMIT");

@@ -63,6 +63,9 @@ function mapPaymentRow(row: any): RemeseroPayment {
     paidAt: new Date(row.paidAt).toISOString(),
     revertedAt: row.revertedAt == null ? null : new Date(row.revertedAt).toISOString(),
     revertedReason: row.revertedReason == null ? null : String(row.revertedReason),
+    cashMovementId: row.cashMovementId == null ? null : String(row.cashMovementId),
+    cashCupBefore: row.cashCupBefore == null ? null : toNumber(row.cashCupBefore),
+    cashCupAfter: row.cashCupAfter == null ? null : toNumber(row.cashCupAfter),
   };
 }
 
@@ -194,11 +197,19 @@ export async function GET(
     const remesero = mapRemeseroRow(remeseroResult.rows[0]);
 
     const paymentsResult = await client.query(
-      `SELECT id, remesero_id as "remeseroId", amount_paid as "amountPaid",
-              deuda_antes_pago as "debtBeforePayment", deuda_despues_pago as "debtAfterPayment",
-              note, paid_at as "paidAt", reverted_at as "revertedAt",
-              reverted_reason as "revertedReason"
-       FROM remesero_payments WHERE remesero_id = $1 ORDER BY paid_at DESC`,
+      `SELECT payment.id, payment.remesero_id as "remeseroId",
+              payment.amount_paid as "amountPaid",
+              payment.deuda_antes_pago as "debtBeforePayment",
+              payment.deuda_despues_pago as "debtAfterPayment",
+              payment.note, payment.paid_at as "paidAt",
+              payment.reverted_at as "revertedAt",
+              payment.reverted_reason as "revertedReason",
+              payment.cash_movement_id as "cashMovementId",
+              cash.balance_before as "cashCupBefore",
+              cash.balance_after as "cashCupAfter"
+       FROM remesero_payments payment
+       LEFT JOIN finance_cash_movements cash ON cash.id = payment.cash_movement_id
+       WHERE payment.remesero_id = $1 ORDER BY payment.paid_at DESC`,
       [id],
     );
     const payments = paymentsResult.rows.map(mapPaymentRow);

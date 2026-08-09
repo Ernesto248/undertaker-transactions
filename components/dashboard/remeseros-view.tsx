@@ -659,7 +659,7 @@ export function RemeserosView({
                         <div className="grid gap-3 md:grid-cols-3">
                           <div className="space-y-2">
                             <Label htmlFor={`payment-amount-${remesero.id}`}>
-                              Monto pagado
+                              Monto pagado (CUP)
                             </Label>
                             <Input
                               id={`payment-amount-${remesero.id}`}
@@ -700,6 +700,10 @@ export function RemeserosView({
                             />
                           </div>
                         </div>
+
+                        <p className="text-xs text-muted-foreground">
+                          El pago se descontará del efectivo CUP y al revertirlo se devolverá al balance.
+                        </p>
 
                         <Button
                           type="button"

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { AccountsView } from "@/components/dashboard/accounts-view";
 import type { AccountBalance } from "@/lib/types";
 
@@ -12,6 +12,13 @@ const account: AccountBalance = {
   transactionCount: 1,
   lastTransactionAt: null,
 };
+
+beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    value: vi.fn(),
+  });
+});
 
 function renderAccountsView(onCreateMovement = vi.fn()) {
   render(
@@ -40,8 +47,10 @@ describe("AccountsView", () => {
       fireEvent.click(screen.getByRole("button", { name: "Expandir" }));
     });
 
+    fireEvent.click(screen.getAllByRole("combobox")[0]);
+    fireEvent.click(await screen.findByRole("option", { name: "GASTO" }));
+
     const amountInput = screen.getByPlaceholderText("0.00");
-    expect(amountInput.getAttribute("step")).toBe("0.01");
     expect(amountInput.getAttribute("inputmode")).toBe("decimal");
 
     fireEvent.change(amountInput, { target: { value: "125.75" } });
@@ -50,7 +59,7 @@ describe("AccountsView", () => {
     });
 
     expect(onCreateMovement).toHaveBeenCalledWith("account-1", {
-      movementType: "wire",
+      movementType: "expense",
       amount: 125.75,
       note: undefined,
     });

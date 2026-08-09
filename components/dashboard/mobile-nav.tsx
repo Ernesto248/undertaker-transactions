@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, List, Wallet, Users, X } from "lucide-react";
+import { Landmark, LayoutDashboard, List, Wallet, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface MobileNavProps {
@@ -16,6 +16,7 @@ const navItems = [
   { id: "transactions", label: "Transacciones", icon: List },
   { id: "accounts", label: "Cuentas", icon: Wallet },
   { id: "remeseros", label: "Remeseros", icon: Users },
+  { id: "finances", label: "Finanzas", icon: Landmark },
 ];
 
 export function MobileNav({

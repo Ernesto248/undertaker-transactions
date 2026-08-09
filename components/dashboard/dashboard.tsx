@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState, useMemo, useEffect } from "react";
 import { Header } from "./header";
 import { MobileNav } from "./mobile-nav";
@@ -40,6 +41,11 @@ import { consumeDashboardReturnTab } from "@/lib/dashboard-tabs";
 interface DashboardProps {
   initialTransactions: Transaction[];
 }
+
+const FinancesView = dynamic(
+  () => import("./finances-view").then((module) => module.FinancesView),
+  { loading: () => <p className="text-sm text-muted-foreground">Cargando finanzas...</p> },
+);
 
 export function Dashboard({ initialTransactions }: DashboardProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -211,7 +217,15 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
 
   const createAccountMovement = async (
     accountId: string,
-    input: { movementType: AccountMovementType; amount: number; note?: string },
+    input: {
+      movementType: AccountMovementType;
+      amount: number;
+      note?: string;
+      counterpartyId?: string;
+      settlementCurrency?: "USD" | "CUP";
+      conversionRate?: number;
+      feePercent?: number;
+    },
   ) => {
     const res = await fetch(apiUrl("/api/accounts"), {
       method: "POST",
@@ -221,6 +235,10 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
         movementType: input.movementType,
         amount: input.amount,
         note: input.note,
+        counterpartyId: input.counterpartyId,
+        settlementCurrency: input.settlementCurrency,
+        conversionRate: input.conversionRate,
+        feePercent: input.feePercent,
       }),
     });
 
@@ -877,6 +895,8 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
                 onGetShareSummary={getRemeseroShareSummary}
               />
             )}
+
+            {activeTab === "finances" && <FinancesView />}
           </div>
         </div>
       </main>

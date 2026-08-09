@@ -23,11 +23,9 @@ type CreateRemeseroPaymentDialogProps = {
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
     minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
+    maximumFractionDigits: 2,
+  }).format(value) + " CUP";
 }
 
 function formatThousandsInput(value: string) {
@@ -68,6 +66,7 @@ export function CreateRemeseroPaymentDialog({
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [zeroOut, setZeroOut] = useState(false);
+  const [cashCup, setCashCup] = useState<number | null>(null);
   const [submitState, setSubmitState] = useState<
     | { kind: "idle" }
     | { kind: "submitting" }
@@ -75,11 +74,26 @@ export function CreateRemeseroPaymentDialog({
   >({ kind: "idle" });
 
   useEffect(() => {
+    if (!open) return;
+    let active = true;
+    void fetch("/api/finances", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((payload) => {
+        if (active && payload?.overview?.settings) {
+          setCashCup(Number(payload.overview.settings.cashCup));
+        }
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [open]);
+
+  useEffect(() => {
     if (!open) {
       setAmount("");
       setNote("");
       setZeroOut(false);
       setSubmitState({ kind: "idle" });
+      setCashCup(null);
     }
   }, [open]);
 
@@ -142,7 +156,7 @@ export function CreateRemeseroPaymentDialog({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="payment-amount">Monto a pagar</Label>
+            <Label htmlFor="payment-amount">Monto a pagar (CUP)</Label>
             <Input
               id="payment-amount"
               type="text"
@@ -153,6 +167,14 @@ export function CreateRemeseroPaymentDialog({
               readOnly={zeroOut}
             />
           </div>
+
+          {cashCup !== null && Number.isFinite(Number(amount)) && Number(amount) > 0 ? (
+            <p className="rounded-lg bg-secondary/40 px-3 py-2 text-sm text-muted-foreground">
+              Efectivo CUP: {formatCurrency(cashCup)} → {formatCurrency(cashCup - Number(amount))}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">Este pago se descontará del efectivo CUP.</p>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="payment-note">Nota (opcional)</Label>

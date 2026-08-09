@@ -14,6 +14,13 @@ function mapMovementRow(row: any): AccountMovement {
     createdAt: new Date(row.createdAt).toISOString(),
     revertedAt: row.revertedAt ? new Date(row.revertedAt).toISOString() : null,
     revertedReason: row.revertedReason ? String(row.revertedReason) : null,
+    counterpartyId: row.counterpartyId == null ? null : String(row.counterpartyId),
+    counterpartyName: row.counterpartyName == null ? null : String(row.counterpartyName),
+    settlementCurrency: row.settlementCurrency === "CUP" ? "CUP" : row.settlementCurrency === "USD" ? "USD" : null,
+    conversionRate: row.conversionRate == null ? null : Number(row.conversionRate),
+    feePercent: row.feePercent == null ? null : Number(row.feePercent),
+    debtAmount: row.debtAmount == null ? null : Number(row.debtAmount),
+    financeDebtMovementId: row.financeDebtMovementId == null ? null : String(row.financeDebtMovementId),
   };
 }
 
@@ -81,8 +88,16 @@ export async function GET(request: Request, { params }: Params) {
         m.note,
         m.created_at as "createdAt",
         m.reverted_at as "revertedAt",
-        m.reverted_reason as "revertedReason"
+        m.reverted_reason as "revertedReason",
+        m.counterparty_id as "counterpartyId",
+        counterparty.name as "counterpartyName",
+        m.settlement_currency as "settlementCurrency",
+        m.conversion_rate as "conversionRate",
+        m.fee_percent as "feePercent",
+        m.debt_amount as "debtAmount",
+        m.finance_debt_movement_id as "financeDebtMovementId"
       FROM account_outflow_movements m
+      LEFT JOIN finance_counterparties counterparty ON counterparty.id = m.counterparty_id
       WHERE m.gmail_account_id = $1
       ${rangeWhere}
       ORDER BY m.created_at DESC

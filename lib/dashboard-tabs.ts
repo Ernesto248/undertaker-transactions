@@ -5,6 +5,7 @@ export const DASHBOARD_TABS = [
   "transactions",
   "accounts",
   "remeseros",
+  "finances",
 ] as const;
 
 export type DashboardTab = (typeof DASHBOARD_TABS)[number];

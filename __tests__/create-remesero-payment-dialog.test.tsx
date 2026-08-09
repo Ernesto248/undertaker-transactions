@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { CreateRemeseroPaymentDialog } from "@/components/dashboard/create-remesero-payment-dialog";
 import type { Remesero } from "@/lib/types";
 
@@ -14,7 +14,7 @@ const baseRemesero: Remesero = {
 
 describe("CreateRemeseroPaymentDialog", () => {
   beforeEach(() => {
-    vi.spyOn(window, "fetch").mockResolvedValue(
+    vi.spyOn(window, "fetch").mockImplementation(async () =>
       new Response(JSON.stringify({ ok: true, payment: {} }), {
         status: 200,
         headers: { "content-type": "application/json" },
@@ -128,7 +128,7 @@ describe("CreateRemeseroPaymentDialog", () => {
 
   it("submits the payment with the entered amount and calls onCreated on success", async () => {
     const onCreated = vi.fn();
-    const fetchMock = vi.spyOn(window, "fetch").mockResolvedValue(
+    const fetchMock = vi.spyOn(window, "fetch").mockImplementation(async () =>
       new Response(JSON.stringify({ ok: true, payment: { id: "p-1" } }), {
         status: 201,
         headers: { "content-type": "application/json" },
@@ -152,7 +152,7 @@ describe("CreateRemeseroPaymentDialog", () => {
     const submitButton = screen.getByRole("button", { name: /registrar pago/i });
     fireEvent.click(submitButton);
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/remeseros/r-1/payments",
@@ -162,12 +162,11 @@ describe("CreateRemeseroPaymentDialog", () => {
         body: JSON.stringify({ amountPaid: 500, note: "transfer" }),
       }),
     );
-    expect(onCreated).toHaveBeenCalled();
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
   it("submits with deudaActual when 'Dejar en 0' is on", async () => {
-    const fetchMock = vi.spyOn(window, "fetch").mockResolvedValue(
+    const fetchMock = vi.spyOn(window, "fetch").mockImplementation(async () =>
       new Response(JSON.stringify({ ok: true, payment: { id: "p-1" } }), {
         status: 201,
         headers: { "content-type": "application/json" },

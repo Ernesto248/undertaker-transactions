@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, List, Wallet, Users } from "lucide-react";
+import { Landmark, LayoutDashboard, List, Wallet, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 interface BottomNavProps {
@@ -14,6 +14,7 @@ const navItems = [
   { id: "transactions", label: "Transacc.", icon: List },
   { id: "accounts", label: "Cuentas", icon: Wallet },
   { id: "remeseros", label: "Remeseros", icon: Users },
+  { id: "finances", label: "Finanzas", icon: Landmark },
 ];
 
 export function BottomNav({ activeTab, setActiveTab }: BottomNavProps) {
@@ -56,7 +57,7 @@ export function BottomNav({ activeTab, setActiveTab }: BottomNavProps) {
       className="fixed inset-x-0 z-50 bg-card/95 backdrop-blur-lg border-t border-border md:hidden pb-[env(safe-area-inset-bottom)]"
       style={navStyle}
     >
-      <div className="flex items-center justify-around px-2 py-2">
+      <div className="flex items-center justify-around px-1 py-2">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
@@ -66,7 +67,7 @@ export function BottomNav({ activeTab, setActiveTab }: BottomNavProps) {
               key={item.id}
               onClick={() => setActiveTab(item.id)}
               className={cn(
-                "flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors min-w-[60px]",
+                "flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-2 transition-colors",
                 isActive ? "text-primary" : "text-muted-foreground",
               )}
             >
