@@ -15,6 +15,7 @@ const remesero: Remesero = {
 function renderView(
   selectedRemesero: Remesero,
   onUpdateRemesero = vi.fn().mockResolvedValue(true),
+  openDebtEditor = true,
 ) {
   render(
     <RemeserosView
@@ -33,7 +34,9 @@ function renderView(
     />,
   );
 
-  fireEvent.click(screen.getByRole("button", { name: "Editar deuda" }));
+  if (openDebtEditor) {
+    fireEvent.click(screen.getByRole("button", { name: "Editar deuda" }));
+  }
 
   return onUpdateRemesero;
 }
@@ -57,6 +60,33 @@ describe("RemeserosView debt editor", () => {
       expect(onUpdateRemesero).toHaveBeenCalledWith("r-1", {
         deudaActual: -750.25,
         deudaActualNote: "Ajuste manual desde la interfaz",
+      });
+    });
+  });
+
+  it("opens the remesero detail by clicking the card", () => {
+    renderView(remesero, undefined, false);
+
+    expect(
+      screen
+        .getByRole("link", { name: "Ver detalle de Miguel" })
+        .getAttribute("href"),
+    ).toBe("/remeseros/r-1");
+  });
+
+  it("edits the price without opening the remesero detail", async () => {
+    const onUpdateRemesero = vi.fn().mockResolvedValue(true);
+    renderView(remesero, onUpdateRemesero, false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Precio" }));
+    const priceInput = await screen.findByLabelText("Precio");
+    expect((priceInput as HTMLInputElement).value).toBe("510");
+    fireEvent.change(priceInput, { target: { value: "680.5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar precio" }));
+
+    await waitFor(() => {
+      expect(onUpdateRemesero).toHaveBeenCalledWith("r-1", {
+        precioActual: 680.5,
       });
     });
   });

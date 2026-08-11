@@ -16,8 +16,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  ChevronDown,
   ChevronUp,
+  CircleDollarSign,
   DollarSign,
   MessageCircle,
   PencilLine,
@@ -112,6 +112,11 @@ export function RemeserosView({
     useState<DebtBalanceKind>("deuda");
   const [savingDebt, setSavingDebt] = useState(false);
   const [debtEditError, setDebtEditError] = useState<string | null>(null);
+  const [priceEditingRemesero, setPriceEditingRemesero] =
+    useState<Remesero | null>(null);
+  const [priceDraft, setPriceDraft] = useState("");
+  const [savingPrice, setSavingPrice] = useState(false);
+  const [priceEditError, setPriceEditError] = useState<string | null>(null);
 
   const totals = useMemo(() => {
     const deudaTotal = remeseros.reduce(
@@ -362,6 +367,46 @@ export function RemeserosView({
     setDebtEditError(null);
   };
 
+  const handleOpenPriceEdit = (remesero: Remesero) => {
+    setPriceEditingRemesero(remesero);
+    setPriceDraft(String(remesero.precioActual));
+    setPriceEditError(null);
+  };
+
+  const handlePriceDialogOpenChange = (open: boolean) => {
+    if (open || savingPrice) return;
+    setPriceEditingRemesero(null);
+    setPriceDraft("");
+    setPriceEditError(null);
+  };
+
+  const handleSavePrice = async () => {
+    if (!priceEditingRemesero) return;
+
+    const precioActual = Number(priceDraft);
+    if (!Number.isFinite(precioActual) || precioActual < 0) {
+      setPriceEditError("Ingresa un precio valido igual o mayor que 0.");
+      return;
+    }
+
+    setSavingPrice(true);
+    setPriceEditError(null);
+    try {
+      const updated = await onUpdateRemesero(priceEditingRemesero.id, {
+        precioActual,
+      });
+      if (!updated) {
+        setPriceEditError("No se pudo actualizar el precio.");
+        return;
+      }
+
+      setPriceEditingRemesero(null);
+      setPriceDraft("");
+    } finally {
+      setSavingPrice(false);
+    }
+  };
+
   const handleDebtDialogOpenChange = (open: boolean) => {
     if (open || savingDebt) return;
     setDebtEditingRemesero(null);
@@ -448,11 +493,18 @@ export function RemeserosView({
           return (
             <Card
               key={remesero.id}
-              className="overflow-hidden border-border/70 bg-gradient-to-br from-card via-card to-secondary/20 shadow-sm transition-all duration-200 hover:shadow-md"
+              className="relative cursor-pointer overflow-hidden border-border/70 bg-gradient-to-br from-card via-card to-secondary/20 shadow-sm transition-all duration-200 hover:border-primary/35 hover:shadow-md"
             >
-              <CardHeader className="pb-2 space-y-3">
+              <Link
+                href={`/remeseros/${remesero.id}`}
+                aria-label={`Ver detalle de ${remesero.nombre}`}
+                className="absolute inset-0 z-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+              >
+                <span className="sr-only">Ver detalle de {remesero.nombre}</span>
+              </Link>
+              <CardHeader className="pointer-events-none relative z-10 pb-2 space-y-3">
                 {isExpanded && (
-                  <div className="flex justify-end gap-2">
+                  <div className="pointer-events-auto flex justify-end gap-2">
                     <Button
                       type="button"
                       variant="outline"
@@ -520,7 +572,7 @@ export function RemeserosView({
                   </div>
                 </div>
                 {!isExpanded && (
-                  <div className="mx-auto grid w-full max-w-md grid-cols-2 gap-2">
+                  <div className="pointer-events-auto mx-auto grid w-full max-w-md grid-cols-2 gap-2">
                     <Button
                       type="button"
                       variant="outline"
@@ -555,20 +607,20 @@ export function RemeserosView({
                       Editar deuda
                     </Button>
                     <Button
-                      asChild
-                      variant="ghost"
+                      type="button"
+                      variant="outline"
                       size="sm"
                       className="w-full min-w-0 justify-center px-2"
+                      onClick={() => handleOpenPriceEdit(remesero)}
                     >
-                      <Link href={`/remeseros/${remesero.id}`}>
-                        Ver detalle <ChevronDown className="h-4 w-4 ml-1" />
-                      </Link>
+                      <CircleDollarSign className="h-4 w-4 mr-1" />
+                      Precio
                     </Button>
                   </div>
                 )}
               </CardHeader>
               {isExpanded && (
-                <CardContent className="space-y-4">
+                <CardContent className="pointer-events-auto relative z-10 space-y-4">
                   <div className="grid gap-3 md:grid-cols-3">
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">
@@ -875,6 +927,59 @@ export function RemeserosView({
           void onRefreshRemeseros();
         }}
       />
+
+      <Dialog
+        open={priceEditingRemesero !== null}
+        onOpenChange={handlePriceDialogOpenChange}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar precio</DialogTitle>
+            <DialogDescription>
+              Cambia el precio actual de {priceEditingRemesero?.nombre}. El
+              nuevo valor se aplicara a las asignaciones futuras.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="editar-precio-remesero">Precio</Label>
+            <Input
+              id="editar-precio-remesero"
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              value={priceDraft}
+              onChange={(event) => {
+                setPriceDraft(event.target.value);
+                setPriceEditError(null);
+              }}
+              placeholder="0.00"
+            />
+          </div>
+          {priceEditError ? (
+            <p className="text-sm text-destructive" role="alert">
+              {priceEditError}
+            </p>
+          ) : null}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handlePriceDialogOpenChange(false)}
+              disabled={savingPrice}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleSavePrice()}
+              disabled={savingPrice || priceDraft.trim() === ""}
+            >
+              {savingPrice ? "Guardando..." : "Guardar precio"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={debtEditingRemesero !== null}
