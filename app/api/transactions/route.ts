@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { getPool } from "@/lib/db";
 import type { Transaction } from "@/lib/types";
+import {
+  isValidTransactionCursor,
+  loadTransactionFeed,
+} from "@/lib/transaction-feed";
 
 export const runtime = "nodejs";
 
@@ -112,7 +116,8 @@ async function getOrCreateGmailAccountId(
 }
 
 export async function GET(request: Request) {
-  const status = new URL(request.url).searchParams.get("status") ?? "active";
+  const searchParams = new URL(request.url).searchParams;
+  const status = searchParams.get("status") ?? "active";
   const parsedStatus = z.enum(["active", "deleted"]).safeParse(status);
   if (!parsedStatus.success) {
     return Response.json(
@@ -123,6 +128,54 @@ export async function GET(request: Request) {
 
   const client = await getPool().connect();
   try {
+    if (searchParams.get("view") === "page") {
+      const parsed = z.object({
+        limit: z.coerce.number().int().min(1).max(100).default(30),
+        cursor: OptionalStringSchema,
+        bank: OptionalStringSchema,
+        account: OptionalStringSchema,
+        search: OptionalStringSchema,
+        sender: OptionalStringSchema,
+        amount: z.preprocess(
+          (value) => value === null || value === "" ? undefined : value,
+          z.coerce.number().finite().optional(),
+        ),
+        remesero: OptionalStringSchema,
+        from: z.preprocess(
+          (value) => value === null || value === "" ? undefined : value,
+          z.string().datetime({ offset: true }).optional(),
+        ),
+        to: z.preprocess(
+          (value) => value === null || value === "" ? undefined : value,
+          z.string().datetime({ offset: true }).optional(),
+        ),
+      }).safeParse({
+        limit: searchParams.get("limit") ?? undefined,
+        cursor: searchParams.get("cursor"),
+        bank: searchParams.get("bank"),
+        account: searchParams.get("account"),
+        search: searchParams.get("search"),
+        sender: searchParams.get("sender"),
+        amount: searchParams.get("amount"),
+        remesero: searchParams.get("remesero"),
+        from: searchParams.get("from"),
+        to: searchParams.get("to"),
+      });
+
+      if (!parsed.success || !isValidTransactionCursor(parsed.data?.cursor)) {
+        return Response.json(
+          { ok: false, error: "validation_error" },
+          { status: 400 },
+        );
+      }
+
+      const feed = await loadTransactionFeed(client, {
+        status: parsedStatus.data,
+        ...parsed.data,
+      });
+      return Response.json({ ok: true, ...feed }, { status: 200 });
+    }
+
     const query = `
       SELECT 
         t.id,
@@ -142,11 +195,11 @@ export async function GET(request: Request) {
       LEFT JOIN gmail_accounts g ON t.gmail_account_id = g.id
       LEFT JOIN remesero_transaction_assignments rta ON rta.transaction_id = t.id AND rta.unassigned_at IS NULL
       LEFT JOIN remeseros r ON r.id = rta.remesero_id
-      LEFT JOIN LATERAL (
-        SELECT COUNT(*) as history_count
-        FROM remesero_transaction_assignments history
-        WHERE history.transaction_id = t.id
-      ) assignment_history ON true
+      LEFT JOIN (
+        SELECT transaction_id, COUNT(*) as history_count
+        FROM remesero_transaction_assignments
+        GROUP BY transaction_id
+      ) assignment_history ON assignment_history.transaction_id = t.id
       WHERE ${parsedStatus.data === "active" ? "t.deleted_at IS NULL" : "t.deleted_at IS NOT NULL"}
       ORDER BY ${parsedStatus.data === "active" ? "t.occurred_at" : "t.deleted_at"} DESC
     `;

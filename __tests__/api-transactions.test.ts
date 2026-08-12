@@ -88,6 +88,77 @@ describe("GET /api/transactions", () => {
     );
     expect(response.status).toBe(400);
   });
+
+  it("returns a cursor page with global summary and filter options", async () => {
+    const client: MockClient = {
+      query: vi.fn()
+        .mockResolvedValueOnce({ rows: [{
+          transaction_rows: [{
+            id: "11111111-1111-4111-8111-111111111111",
+            bank: "TD Bank",
+            accountName: "BDR",
+            senderName: "Primero",
+            amount: "100",
+            confirmationCode: "1",
+            createdAt: "2026-08-12T14:00:00.000Z",
+            sort_at: "2026-08-12T14:00:00.000Z",
+            assignmentHistoryCount: "0",
+          }, {
+            id: "22222222-2222-4222-8222-222222222222",
+            bank: "TD Bank",
+            accountName: "BDR",
+            senderName: "Segundo",
+            amount: "50",
+            confirmationCode: "2",
+            createdAt: "2026-08-12T14:00:00.000Z",
+            sort_at: "2026-08-12T14:00:00.000Z",
+            assignmentHistoryCount: "1",
+          }],
+          total_transactions: 25,
+          total_amount: "2500",
+          avg_transaction: "100",
+          today_transactions: 5,
+          yesterday_transactions: 4,
+          today_amount: "500",
+          yesterday_amount: "400",
+          bank_totals: [{ name: "TD Bank", value: 2500 }],
+          bank_distribution: [{ name: "TD Bank", value: 2500 }],
+          account_distribution: [{ name: "BDR", value: 2500 }],
+          chart_points: [],
+          filter_banks: ["TD Bank"],
+          filter_accounts: ["BDR"],
+          filter_remeseros: ["Ernesto"],
+        }] }),
+      release: vi.fn(),
+    };
+    connectMock.mockResolvedValue(client);
+    const GET = await loadGetHandler();
+
+    const response = await GET(new Request(
+      "http://localhost/api/transactions?view=page&limit=1&bank=TD%20Bank",
+    ));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.transactions).toHaveLength(1);
+    expect(body.pageInfo).toMatchObject({ hasMore: true });
+    expect(body.pageInfo.nextCursor).toEqual(expect.any(String));
+    expect(body.summary).toMatchObject({ totalTransactions: 25, totalAmount: 2500 });
+    expect(body.filterOptions.banks).toEqual(["TD Bank"]);
+    expect(String(client.query.mock.calls[0][0])).toContain("page AS (");
+    expect(String(client.query.mock.calls[0][0])).not.toContain("LEFT JOIN LATERAL");
+  });
+
+  it("rejects an invalid transaction cursor", async () => {
+    const client: MockClient = { query: vi.fn(), release: vi.fn() };
+    connectMock.mockResolvedValue(client);
+    const GET = await loadGetHandler();
+    const response = await GET(new Request(
+      "http://localhost/api/transactions?view=page&cursor=invalid",
+    ));
+    expect(response.status).toBe(400);
+    expect(client.query).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST /api/transactions", () => {

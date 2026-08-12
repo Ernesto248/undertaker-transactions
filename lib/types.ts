@@ -26,6 +26,51 @@ export type Transaction = {
   assignmentHistoryCount?: number;
 };
 
+export type TransactionFeedStatus = "active" | "deleted";
+
+export type TransactionFeedPageInfo = {
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
+export type TransactionFeedDistribution = {
+  name: string;
+  value: number;
+};
+
+export type TransactionFeedChartPoint = {
+  date: string;
+  bank: string;
+  accountName: string;
+  amount: number;
+};
+
+export type TransactionFeedSummary = {
+  totalTransactions: number;
+  totalAmount: number;
+  avgTransaction: number;
+  todayTransactions: number;
+  todayTransactionsTrend: number | null;
+  totalAmountTrend: number | null;
+  bankTotals: Array<{ bank: string; totalAmount: number }>;
+  bankDistribution: TransactionFeedDistribution[];
+  accountDistribution: TransactionFeedDistribution[];
+  chartPoints: TransactionFeedChartPoint[];
+};
+
+export type TransactionFeedFilterOptions = {
+  banks: string[];
+  accounts: string[];
+  remeseros: string[];
+};
+
+export type TransactionFeed = {
+  transactions: Transaction[];
+  pageInfo: TransactionFeedPageInfo;
+  summary: TransactionFeedSummary;
+  filterOptions: TransactionFeedFilterOptions;
+};
+
 export type TransactionLifecycleAction = "delete" | "restore";
 
 export type TransactionDeletionBlocker =

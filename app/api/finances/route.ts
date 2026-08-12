@@ -25,25 +25,60 @@ function toNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export async function GET() {
+export async function GET(request?: Request) {
   const client = await getPool().connect();
 
   try {
-    const [stateResult, zelleInventories, remeserosResult, counterpartiesResult, movementsResult, changesResult, expensesResult, cashMovementsResult, exchangesResult] =
+    const summaryView = request
+      ? new URL(request.url).searchParams.get("view") === "summary"
+      : false;
+    const [coreResult, zelleInventories, counterpartiesResult, movementsResult] =
       await Promise.all([
         client.query(`
-          SELECT cash_usd as "cashUsd", cash_cup as "cashCup",
-                 usd_cup_rate as "usdCupRate", updated_at as "updatedAt"
-          FROM finance_state WHERE id = 1
-        `),
-        loadZelleInventories(client),
-        client.query(`
           SELECT
-            COALESCE(SUM(GREATEST(-deuda_actual, 0)), 0) as "receivableCup",
-            COALESCE(SUM(GREATEST(deuda_actual, 0)), 0) as "payableCup",
-            COALESCE(-SUM(deuda_actual), 0) as "netCup"
-          FROM remeseros WHERE deleted_at IS NULL
-        `),
+            (SELECT row_to_json(state_row) FROM (
+              SELECT cash_usd as "cashUsd", cash_cup as "cashCup",
+                     usd_cup_rate as "usdCupRate", updated_at as "updatedAt"
+              FROM finance_state WHERE id = 1
+            ) state_row) AS state,
+            (SELECT row_to_json(remesero_row) FROM (
+              SELECT COALESCE(SUM(GREATEST(-deuda_actual, 0)), 0) as "receivableCup",
+                     COALESCE(SUM(GREATEST(deuda_actual, 0)), 0) as "payableCup",
+                     COALESCE(-SUM(deuda_actual), 0) as "netCup"
+              FROM remeseros WHERE deleted_at IS NULL
+            ) remesero_row) AS remeseros,
+            (SELECT COALESCE(json_agg(row_to_json(change_row)), '[]') FROM (
+              SELECT id, field_name as "fieldName", previous_value as "previousValue",
+                     new_value as "newValue", note, changed_at as "changedAt"
+              FROM finance_state_changes ORDER BY changed_at DESC LIMIT 10
+            ) change_row) AS changes,
+            (SELECT COALESCE(json_agg(row_to_json(expense_row)), '[]') FROM (
+              SELECT id, currency, amount, description,
+                     balance_before as "balanceBefore", balance_after as "balanceAfter",
+                     cash_movement_id as "cashMovementId",
+                     reversal_cash_movement_id as "reversalCashMovementId",
+                     occurred_at as "occurredAt", reverted_at as "revertedAt",
+                     reverted_reason as "revertedReason"
+              FROM finance_expenses ORDER BY occurred_at DESC, created_at DESC LIMIT 10
+            ) expense_row) AS expenses,
+            (SELECT COALESCE(json_agg(row_to_json(exchange_row)), '[]') FROM (
+              SELECT id, direction, source_amount as "sourceAmount", rate,
+                     target_amount as "targetAmount", note,
+                     occurred_at as "occurredAt", reverted_at as "revertedAt",
+                     reverted_reason as "revertedReason"
+              FROM finance_currency_exchanges ORDER BY occurred_at DESC, created_at DESC LIMIT 10
+            ) exchange_row) AS exchanges,
+            CASE WHEN $1::boolean THEN '[]'::json ELSE
+              (SELECT COALESCE(json_agg(row_to_json(cash_row)), '[]') FROM (
+                SELECT id, currency, signed_amount as "signedAmount",
+                       balance_before as "balanceBefore", balance_after as "balanceAfter",
+                       operation_type as "operationType", operation_id as "operationId",
+                       reversal_of_id as "reversalOfId", note, occurred_at as "occurredAt"
+                FROM finance_cash_movements ORDER BY occurred_at DESC, created_at DESC LIMIT 20
+              ) cash_row)
+            END AS cash_movements
+        `, [summaryView]),
+        loadZelleInventories(client),
         client.query(`
           SELECT c.id, c.name, c.archived_at as "archivedAt",
                  c.created_at as "createdAt", c.updated_at as "updatedAt",
@@ -62,7 +97,7 @@ export async function GET() {
           GROUP BY c.id
           ORDER BY c.name
         `),
-        client.query(`
+        summaryView ? Promise.resolve({ rows: [] }) : client.query(`
           WITH ranked AS (
             SELECT m.*,
                    row_number() OVER (
@@ -84,44 +119,15 @@ export async function GET() {
           FROM ranked WHERE row_number <= 10
           ORDER BY occurred_at DESC, id
         `),
-        client.query(`
-          SELECT id, field_name as "fieldName", previous_value as "previousValue",
-                 new_value as "newValue", note, changed_at as "changedAt"
-          FROM finance_state_changes
-          ORDER BY changed_at DESC LIMIT 10
-        `),
-        client.query(`
-          SELECT id, currency, amount, description,
-                 balance_before as "balanceBefore", balance_after as "balanceAfter",
-                 cash_movement_id as "cashMovementId",
-                 reversal_cash_movement_id as "reversalCashMovementId",
-                 occurred_at as "occurredAt", reverted_at as "revertedAt",
-                 reverted_reason as "revertedReason"
-          FROM finance_expenses
-          ORDER BY occurred_at DESC, created_at DESC
-          LIMIT 10
-        `),
-        client.query(`
-          SELECT id, currency, signed_amount as "signedAmount",
-                 balance_before as "balanceBefore", balance_after as "balanceAfter",
-                 operation_type as "operationType", operation_id as "operationId",
-                 reversal_of_id as "reversalOfId", note, occurred_at as "occurredAt"
-          FROM finance_cash_movements
-          ORDER BY occurred_at DESC, created_at DESC
-          LIMIT 20
-        `),
-        client.query(`
-          SELECT id, direction, source_amount as "sourceAmount", rate,
-                 target_amount as "targetAmount", note,
-                 occurred_at as "occurredAt", reverted_at as "revertedAt",
-                 reverted_reason as "revertedReason"
-          FROM finance_currency_exchanges
-          ORDER BY occurred_at DESC, created_at DESC
-          LIMIT 10
-        `),
       ]);
 
-    const state = stateResult.rows[0] ?? {};
+    const core = coreResult.rows[0] ?? {};
+    const state = core.state ?? {};
+    const remeseroRow = core.remeseros ?? {};
+    const changesRows = Array.isArray(core.changes) ? core.changes : [];
+    const expensesRows = Array.isArray(core.expenses) ? core.expenses : [];
+    const exchangesRows = Array.isArray(core.exchanges) ? core.exchanges : [];
+    const cashMovementRows = Array.isArray(core.cash_movements) ? core.cash_movements : [];
     const settings = {
       cashUsd: toNumber(state.cashUsd),
       cashCup: toNumber(state.cashCup),
@@ -181,13 +187,12 @@ export async function GET() {
     );
     const externalNetUsd = external.receivableUsd - external.payableUsd;
     const externalNetCup = external.receivableCup - external.payableCup;
-    const remeseroRow = remeserosResult.rows[0] ?? {};
     const remeserosNetCup = toNumber(remeseroRow.netCup);
     const rate = settings.usdCupRate;
     const zelleValuation = summarizeZelleInventories(zelleInventories);
     const zelleUsd = zelleValuation.summary.balanceUsd;
 
-    const settingChanges: FinanceSettingChange[] = changesResult.rows.map((row: any) => ({
+    const settingChanges: FinanceSettingChange[] = changesRows.map((row: any) => ({
       id: String(row.id),
       fieldName: row.fieldName,
       previousValue: row.previousValue == null ? null : toNumber(row.previousValue),
@@ -196,7 +201,7 @@ export async function GET() {
       changedAt: new Date(row.changedAt).toISOString(),
     }));
 
-    const expenses: FinanceExpense[] = expensesResult.rows.map((row: any) => ({
+    const expenses: FinanceExpense[] = expensesRows.map((row: any) => ({
       id: String(row.id),
       currency: row.currency === "CUP" ? "CUP" : "USD",
       amount: toNumber(row.amount),
@@ -211,7 +216,7 @@ export async function GET() {
       revertedReason: row.revertedReason == null ? null : String(row.revertedReason),
     }));
 
-    const cashMovements: FinanceCashMovement[] = cashMovementsResult.rows.map((row: any) => ({
+    const cashMovements: FinanceCashMovement[] = cashMovementRows.map((row: any) => ({
       id: String(row.id),
       currency: row.currency === "CUP" ? "CUP" : "USD",
       signedAmount: toNumber(row.signedAmount),
@@ -224,7 +229,7 @@ export async function GET() {
       occurredAt: new Date(row.occurredAt).toISOString(),
     }));
 
-    const exchanges: FinanceCurrencyExchange[] = exchangesResult.rows.map((row: any) => ({
+    const exchanges: FinanceCurrencyExchange[] = exchangesRows.map((row: any) => ({
       id: String(row.id),
       direction: row.direction,
       sourceAmount: toNumber(row.sourceAmount),
