@@ -487,7 +487,7 @@ export function FinancesView() {
 
       <Card className="overflow-hidden border-sky-500/25 bg-gradient-to-br from-sky-500/10 via-card to-card">
         <CardHeader>
-          <CardTitle>Valoración FIFO del Zelle</CardTitle>
+          <CardTitle>Valoración del Zelle</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
