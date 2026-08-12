@@ -16,6 +16,7 @@ import { AccountsView } from "./accounts-view";
 import { RemeserosView } from "./remeseros-view";
 import { CreateTransactionDialog } from "./create-transaction-dialog";
 import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { DollarSign, TrendingUp, Calendar, Plus } from "lucide-react";
 import {
   AccountBalance,
@@ -842,34 +843,45 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
                         : `${deletedTransactions.length} transacciones eliminadas`}
                     </p>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 sm:flex">
-                    <Button
-                      type="button"
-                      variant={transactionView === "active" ? "default" : "outline"}
-                      onClick={() => setTransactionView("active")}
-                    >
-                      Activas
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={transactionView === "deleted" ? "default" : "outline"}
-                      onClick={() => {
-                        setTransactionView("deleted");
-                        void refreshDeletedTransactions();
+                  <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-end">
+                    <ToggleGroup
+                      type="single"
+                      value={transactionView}
+                      onValueChange={(value) => {
+                        if (value !== "active" && value !== "deleted") return;
+                        setTransactionView(value);
+                        if (value === "deleted") void refreshDeletedTransactions();
                       }}
+                      aria-label="Vista de transacciones"
+                      className="shrink-0 rounded-lg border border-border bg-secondary/40 p-1"
                     >
-                      Papelera
-                    </Button>
-                    {transactionView === "active" && (
-                      <Button
-                        type="button"
-                        onClick={() => handleCreateDialogOpenChange(true)}
-                        className="col-span-2 w-full sm:w-auto"
+                      <ToggleGroupItem
+                        value="active"
+                        aria-label="Mostrar transacciones activas"
+                        size="sm"
+                        className="h-8 min-w-0 px-2 text-xs data-[state=on]:bg-background data-[state=on]:shadow-sm"
                       >
-                        <Plus className="h-4 w-4" />
-                        Nueva transaccion
-                      </Button>
-                    )}
+                        Activas
+                      </ToggleGroupItem>
+                      <ToggleGroupItem
+                        value="deleted"
+                        aria-label="Mostrar papelera"
+                        size="sm"
+                        className="h-8 min-w-0 px-2 text-xs data-[state=on]:bg-background data-[state=on]:shadow-sm"
+                      >
+                        Papelera
+                      </ToggleGroupItem>
+                    </ToggleGroup>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => handleCreateDialogOpenChange(true)}
+                      className="shrink-0"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span className="sm:hidden">Nueva</span>
+                      <span className="hidden sm:inline">Nueva transaccion</span>
+                    </Button>
                   </div>
                 </div>
 

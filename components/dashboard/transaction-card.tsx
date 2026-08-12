@@ -245,14 +245,15 @@ export function TransactionCard({
                     Desasignar
                   </Button>
                 )}
-                {onDelete && !transaction.deletedAt && (
+                {onDelete &&
+                  !transaction.deletedAt &&
+                  !transaction.assignedRemeseroId && (
                   <Button
                     type="button"
                     size="sm"
                     variant="destructive"
-                    title={transaction.assignedRemeseroId ? "Primero debes desasignar la transacción" : undefined}
                     onClick={() => setLifecycleDialog("delete")}
-                    disabled={Boolean(transaction.assignedRemeseroId) || isAssigning}
+                    disabled={isAssigning}
                   >
                     <Trash2 className="h-4 w-4" />
                     Eliminar

@@ -23,16 +23,14 @@ describe("TransactionCard lifecycle actions", () => {
     expect(screen.getByRole("button", { name: "Eliminar" })).toBeDefined();
   });
 
-  it("disables deletion while an active remesero is assigned", () => {
+  it("hides deletion while an active remesero is assigned", () => {
     render(
       <TransactionCard
         transaction={{ ...transaction, assignedRemeseroId: "remesero-1" }}
         onDelete={vi.fn()}
       />,
     );
-    expect(
-      screen.getByRole("button", { name: "Eliminar" }).hasAttribute("disabled"),
-    ).toBe(true);
+    expect(screen.queryByRole("button", { name: "Eliminar" })).toBeNull();
   });
 
   it("shows deletion metadata and restore action in the trash", () => {
