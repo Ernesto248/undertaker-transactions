@@ -20,7 +20,10 @@ describe("TransactionCard lifecycle actions", () => {
     expect(screen.queryByRole("button", { name: "Eliminar" })).toBeNull();
 
     rerender(<TransactionCard transaction={transaction} onDelete={vi.fn()} />);
-    expect(screen.getByRole("button", { name: "Eliminar" })).toBeDefined();
+    const deleteButton = screen.getByRole("button", { name: "Eliminar" });
+    expect(deleteButton).toBeDefined();
+    expect(deleteButton.className).toContain("bg-amber-500/15");
+    expect(deleteButton.className).not.toContain("bg-destructive");
   });
 
   it("hides deletion while an active remesero is assigned", () => {

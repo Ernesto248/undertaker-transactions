@@ -859,7 +859,7 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
                         value="active"
                         aria-label="Mostrar transacciones activas"
                         size="sm"
-                        className="h-8 min-w-0 px-2 text-xs data-[state=on]:bg-background data-[state=on]:shadow-sm"
+                        className="h-8 min-w-0 px-2 text-xs text-muted-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-sm"
                       >
                         Activas
                       </ToggleGroupItem>
@@ -867,7 +867,7 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
                         value="deleted"
                         aria-label="Mostrar papelera"
                         size="sm"
-                        className="h-8 min-w-0 px-2 text-xs data-[state=on]:bg-background data-[state=on]:shadow-sm"
+                        className="h-8 min-w-0 px-2 text-xs text-muted-foreground data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-sm"
                       >
                         Papelera
                       </ToggleGroupItem>

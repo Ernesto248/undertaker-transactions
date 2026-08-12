@@ -251,7 +251,8 @@ export function TransactionCard({
                   <Button
                     type="button"
                     size="sm"
-                    variant="destructive"
+                    variant="outline"
+                    className="border-amber-500/40 bg-amber-500/15 text-amber-300 hover:bg-amber-500 hover:text-slate-950"
                     onClick={() => setLifecycleDialog("delete")}
                     disabled={isAssigning}
                   >

@@ -246,7 +246,12 @@ export function TransactionLifecycleDialog({
           </Button>
           <Button
             type="button"
-            variant={isDelete ? "destructive" : "default"}
+            variant={isDelete ? "outline" : "default"}
+            className={
+              isDelete
+                ? "border-amber-500/40 bg-amber-500 text-slate-950 hover:bg-amber-500/90 hover:text-slate-950"
+                : undefined
+            }
             disabled={!preview?.canProceed || loading || submitting}
             onClick={submit}
           >
