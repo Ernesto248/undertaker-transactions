@@ -257,6 +257,10 @@ export function summarizeZelleInventories(
 export async function loadZelleInventories(
   client: QueryClient,
   accountId?: string,
+  options: {
+    excludeTransactionId?: string;
+    includeDeletedTransactionId?: string;
+  } = {},
 ): Promise<LoadedZelleInventory[]> {
   const result = await client.query(
     `WITH account_scope AS (
@@ -282,6 +286,8 @@ export async function loadZelleInventories(
             COALESCE(t.occurred_at, t.created_at), aa.price_applied
      FROM account_scope a
      JOIN transactions t ON t.gmail_account_id = a.id
+       AND (t.deleted_at IS NULL OR t.id = $3::uuid)
+       AND ($2::uuid IS NULL OR t.id <> $2::uuid)
      LEFT JOIN active_assignments aa ON aa.transaction_id = t.id
      UNION ALL
      SELECT a.id, a.account_name, a.incoming_adjustment, a.outgoing_adjustment,
@@ -289,7 +295,11 @@ export async function loadZelleInventories(
      FROM account_scope a
      JOIN account_outflow_movements m ON m.gmail_account_id = a.id
      WHERE m.reverted_at IS NULL`,
-    [accountId ?? null],
+    [
+      accountId ?? null,
+      options.excludeTransactionId ?? null,
+      options.includeDeletedTransactionId ?? null,
+    ],
   );
 
   const grouped = new Map<string, ZelleInventoryInput>();

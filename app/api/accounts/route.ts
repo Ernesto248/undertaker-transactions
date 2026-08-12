@@ -83,7 +83,7 @@ export async function GET(request: Request) {
   }
 
   const values: unknown[] = [];
-  const txFilters: string[] = [];
+  const txFilters: string[] = ["deleted_at IS NULL"];
   const movementFilters: string[] = [];
 
   if (fromParam) {

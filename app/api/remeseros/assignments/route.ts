@@ -84,8 +84,9 @@ export async function POST(request: Request) {
       SELECT t.id, t.amount, t.email_id, g.account_name as account_name
       FROM transactions t
       LEFT JOIN gmail_accounts g ON g.id = t.gmail_account_id
-      WHERE t.id = $1
+      WHERE t.id = $1 AND t.deleted_at IS NULL
       LIMIT 1
+      FOR UPDATE OF t
       `,
       [parsed.data.transactionId],
     );
@@ -227,8 +228,9 @@ export async function DELETE(request: Request) {
       SELECT t.id, t.email_id, g.account_name as account_name
       FROM transactions t
       LEFT JOIN gmail_accounts g ON g.id = t.gmail_account_id
-      WHERE t.id = $1
+      WHERE t.id = $1 AND t.deleted_at IS NULL
       LIMIT 1
+      FOR UPDATE OF t
       `,
       [parsed.data.transactionId],
     );

@@ -111,7 +111,16 @@ async function getOrCreateGmailAccountId(
   return fallback.rows[0]?.id ?? null;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const status = new URL(request.url).searchParams.get("status") ?? "active";
+  const parsedStatus = z.enum(["active", "deleted"]).safeParse(status);
+  if (!parsedStatus.success) {
+    return Response.json(
+      { ok: false, error: "validation_error" },
+      { status: 400 },
+    );
+  }
+
   const client = await getPool().connect();
   try {
     const query = `
@@ -123,14 +132,23 @@ export async function GET() {
         t.amount,
         t.confirmation_code as "confirmationCode",
         t.occurred_at as "createdAt",
+        t.deleted_at as "deletedAt",
+        t.deletion_reason as "deletionReason",
         rta.remesero_id as "assignedRemeseroId",
-        r.nombre as "assignedRemeseroNombre"
+        r.nombre as "assignedRemeseroNombre",
+        COALESCE(assignment_history.history_count, 0) as "assignmentHistoryCount"
       FROM transactions t
       LEFT JOIN banks b ON t.bank_id = b.id
       LEFT JOIN gmail_accounts g ON t.gmail_account_id = g.id
       LEFT JOIN remesero_transaction_assignments rta ON rta.transaction_id = t.id AND rta.unassigned_at IS NULL
       LEFT JOIN remeseros r ON r.id = rta.remesero_id
-      ORDER BY t.occurred_at DESC
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*) as history_count
+        FROM remesero_transaction_assignments history
+        WHERE history.transaction_id = t.id
+      ) assignment_history ON true
+      WHERE ${parsedStatus.data === "active" ? "t.deleted_at IS NULL" : "t.deleted_at IS NOT NULL"}
+      ORDER BY ${parsedStatus.data === "active" ? "t.occurred_at" : "t.deleted_at"} DESC
     `;
 
     const result = await client.query(query);
@@ -151,6 +169,12 @@ export async function GET() {
         createdAt: row.createdAt
           ? new Date(row.createdAt).toISOString()
           : new Date().toISOString(),
+        deletedAt: row.deletedAt
+          ? new Date(row.deletedAt).toISOString()
+          : null,
+        deletionReason:
+          row.deletionReason == null ? null : String(row.deletionReason),
+        assignmentHistoryCount: Number(row.assignmentHistoryCount ?? 0),
         type,
       };
     });
@@ -255,8 +279,20 @@ export async function POST(request: Request) {
     } catch {}
 
     if (err?.code === "23505") {
+      let deleted = false;
+      try {
+        const duplicate = await client.query(
+          `SELECT t.deleted_at
+           FROM transactions t
+           JOIN banks b ON b.id = t.bank_id
+           WHERE b.name = $1 AND t.confirmation_code = $2
+           LIMIT 1`,
+          [parsed.data.bankName, parsed.data.confirmationCode],
+        );
+        deleted = Boolean(duplicate.rows[0]?.deleted_at);
+      } catch {}
       return Response.json(
-        { ok: false, error: "duplicate_transaction" },
+        { ok: false, error: "duplicate_transaction", deleted },
         { status: 409 },
       );
     }

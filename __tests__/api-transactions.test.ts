@@ -20,6 +20,76 @@ async function loadHandler() {
   return mod.POST;
 }
 
+async function loadGetHandler() {
+  const mod = await import("@/app/api/transactions/route");
+  return mod.GET;
+}
+
+describe("GET /api/transactions", () => {
+  beforeEach(() => {
+    connectMock.mockReset();
+  });
+
+  it("returns active transactions by default", async () => {
+    const client: MockClient = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+      release: vi.fn(),
+    };
+    connectMock.mockResolvedValue(client);
+    const GET = await loadGetHandler();
+
+    const response = await GET(new Request("http://localhost/api/transactions"));
+
+    expect(response.status).toBe(200);
+    expect(String(client.query.mock.calls[0][0])).toContain("t.deleted_at IS NULL");
+  });
+
+  it("returns the trash with additive deletion metadata", async () => {
+    const client: MockClient = {
+      query: vi.fn().mockResolvedValue({
+        rows: [
+          {
+            id: "tx-1",
+            bank: "TD Bank",
+            accountName: "BDR",
+            senderName: "Cliente",
+            amount: "100",
+            confirmationCode: "123",
+            createdAt: "2026-08-11T12:00:00.000Z",
+            deletedAt: "2026-08-11T13:00:00.000Z",
+            deletionReason: "Duplicada",
+            assignmentHistoryCount: "2",
+          },
+        ],
+      }),
+      release: vi.fn(),
+    };
+    connectMock.mockResolvedValue(client);
+    const GET = await loadGetHandler();
+
+    const response = await GET(
+      new Request("http://localhost/api/transactions?status=deleted"),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(String(client.query.mock.calls[0][0])).toContain("t.deleted_at IS NOT NULL");
+    expect(body.transactions[0]).toMatchObject({
+      deletedAt: "2026-08-11T13:00:00.000Z",
+      deletionReason: "Duplicada",
+      assignmentHistoryCount: 2,
+    });
+  });
+
+  it("rejects an unknown status", async () => {
+    const GET = await loadGetHandler();
+    const response = await GET(
+      new Request("http://localhost/api/transactions?status=unknown"),
+    );
+    expect(response.status).toBe(400);
+  });
+});
+
 describe("POST /api/transactions", () => {
   beforeEach(() => {
     process.env.N8N_INGEST_API_KEY = "test-token";
@@ -204,7 +274,11 @@ describe("POST /api/transactions", () => {
       .mockResolvedValueOnce({ rows: [{ id: "bank-1" }] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ id: "gmail-1" }] })
-      .mockRejectedValueOnce({ code: "23505" });
+      .mockRejectedValueOnce({ code: "23505" })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [{ deleted_at: "2026-08-11T13:00:00.000Z" }],
+      });
 
     connectMock.mockResolvedValue(client);
 
@@ -227,5 +301,6 @@ describe("POST /api/transactions", () => {
     const json = await res.json();
     expect(json.ok).toBe(false);
     expect(json.error).toBe("duplicate_transaction");
+    expect(json.deleted).toBe(true);
   });
 });

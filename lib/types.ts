@@ -21,6 +21,36 @@ export type Transaction = {
   type: TransactionType;
   assignedRemeseroId?: string | null;
   assignedRemeseroNombre?: string | null;
+  deletedAt?: string | null;
+  deletionReason?: string | null;
+  assignmentHistoryCount?: number;
+};
+
+export type TransactionLifecycleAction = "delete" | "restore";
+
+export type TransactionDeletionBlocker =
+  | "active_assignment"
+  | "non_positive_transaction"
+  | "fifo_partially_consumed"
+  | "fifo_fully_consumed"
+  | "account_would_be_negative"
+  | "already_deleted"
+  | "not_deleted";
+
+export type TransactionLifecyclePreview = {
+  action: TransactionLifecycleAction;
+  transactionId: string;
+  amountUsd: number;
+  accountId: string;
+  accountName: string;
+  assignmentHistoryCount: number;
+  canProceed: boolean;
+  blocker: TransactionDeletionBlocker | null;
+  availableFromLotUsd: number;
+  balanceBeforeUsd: number;
+  balanceAfterUsd: number;
+  valuationBefore: ZelleAccountValuation;
+  valuationAfter: ZelleAccountValuation;
 };
 
 export type Remesero = {
@@ -137,6 +167,7 @@ export type RemeseroDetailAssignment = {
   netOperations?: number;
   netAmountUsd?: number;
   netDebtAmount?: number;
+  transactionDeletedAt?: string | null;
 };
 
 export type RemeseroDetailSummaryGroup = {

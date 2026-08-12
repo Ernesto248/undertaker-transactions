@@ -11,6 +11,8 @@ import {
   ArrowLeftRight,
   Copy,
   Check,
+  RotateCcw,
+  Trash2,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -29,12 +31,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { TransactionLifecycleDialog } from "./transaction-lifecycle-dialog";
 
 interface TransactionCardProps {
   transaction: Transaction;
   remeseros?: Remesero[];
   onAssign?: (transactionId: string, remeseroId: string) => Promise<void>;
   onUnassign?: (transactionId: string) => Promise<void>;
+  onDelete?: (transactionId: string) => Promise<void> | void;
+  onRestore?: (transactionId: string) => Promise<void> | void;
   isAssigning?: boolean;
 }
 
@@ -89,11 +94,14 @@ export function TransactionCard({
   remeseros = [],
   onAssign,
   onUnassign,
+  onDelete,
+  onRestore,
   isAssigning = false,
 }: TransactionCardProps) {
   const [copied, setCopied] = useState(false);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [selectedRemeseroId, setSelectedRemeseroId] = useState<string>("");
+  const [lifecycleDialog, setLifecycleDialog] = useState<"delete" | "restore" | null>(null);
   const TypeIcon = typeIcons[transaction.type];
   const bankBadgeColor =
     bankColors[transaction.bank] ??
@@ -180,6 +188,11 @@ export function TransactionCard({
                   Sin asignar
                 </Badge>
               )}
+              {transaction.deletedAt && (
+                <Badge variant="outline" className="text-[10px] md:text-xs border-destructive/30 bg-destructive/10 text-destructive">
+                  En papelera
+                </Badge>
+              )}
               <button
                 type="button"
                 onClick={copyToClipboard}
@@ -198,21 +211,29 @@ export function TransactionCard({
             <p className="mt-2 text-[10px] md:text-xs text-muted-foreground">
               {formatTransactionDate(transaction.createdAt)}
             </p>
-            {onAssign && (
+            {transaction.deletedAt && (
+              <div className="mt-2 text-[10px] md:text-xs text-muted-foreground">
+                <p>Eliminada: {formatTransactionDate(transaction.deletedAt)}</p>
+                {transaction.deletionReason && <p>Motivo: {transaction.deletionReason}</p>}
+              </div>
+            )}
+            {(onAssign || onDelete || onRestore) && (
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setAssignDialogOpen(true)}
-                  disabled={remeseros.length === 0 || isAssigning}
-                >
-                  {isAssigning
-                    ? "Asignando..."
-                    : transaction.assignedRemeseroId
-                      ? "Reasignar"
-                      : "Asignar"}
-                </Button>
+                {onAssign && !transaction.deletedAt && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setAssignDialogOpen(true)}
+                    disabled={remeseros.length === 0 || isAssigning}
+                  >
+                    {isAssigning
+                      ? "Asignando..."
+                      : transaction.assignedRemeseroId
+                        ? "Reasignar"
+                        : "Asignar"}
+                  </Button>
+                )}
                 {transaction.assignedRemeseroId && onUnassign && (
                   <Button
                     type="button"
@@ -222,6 +243,29 @@ export function TransactionCard({
                     disabled={isAssigning}
                   >
                     Desasignar
+                  </Button>
+                )}
+                {onDelete && !transaction.deletedAt && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    title={transaction.assignedRemeseroId ? "Primero debes desasignar la transacción" : undefined}
+                    onClick={() => setLifecycleDialog("delete")}
+                    disabled={Boolean(transaction.assignedRemeseroId) || isAssigning}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Eliminar
+                  </Button>
+                )}
+                {onRestore && transaction.deletedAt && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setLifecycleDialog("restore")}
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Restaurar
                   </Button>
                 )}
                 <Dialog
@@ -280,6 +324,20 @@ export function TransactionCard({
                   </DialogContent>
                 </Dialog>
               </div>
+            )}
+            {lifecycleDialog && (
+              <TransactionLifecycleDialog
+                transaction={transaction}
+                action={lifecycleDialog}
+                open
+                onOpenChange={(open) => {
+                  if (!open) setLifecycleDialog(null);
+                }}
+                onCompleted={async (action) => {
+                  if (action === "delete") await onDelete?.(transaction.id);
+                  else await onRestore?.(transaction.id);
+                }}
+              />
             )}
           </div>
         </div>

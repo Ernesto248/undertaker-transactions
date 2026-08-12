@@ -22,6 +22,7 @@ export async function getTransactions(): Promise<Transaction[]> {
       LEFT JOIN gmail_accounts g ON t.gmail_account_id = g.id
       LEFT JOIN remesero_transaction_assignments rta ON rta.transaction_id = t.id AND rta.unassigned_at IS NULL
       LEFT JOIN remeseros r ON r.id = rta.remesero_id
+      WHERE t.deleted_at IS NULL
       ORDER BY t.occurred_at DESC
     `;
 

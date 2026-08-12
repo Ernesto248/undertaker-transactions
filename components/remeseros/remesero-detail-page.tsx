@@ -1186,6 +1186,14 @@ export function RemeseroDetailPage({ remeseroId }: RemeseroDetailPageProps) {
                               >
                                 {row.isActive ? "Activa" : "Desasignada"}
                               </Badge>
+                              {row.transactionDeletedAt && (
+                                <Badge
+                                  variant="outline"
+                                  className="border-destructive/30 bg-destructive/10 text-destructive"
+                                >
+                                  Transacción eliminada
+                                </Badge>
+                              )}
                               <Badge variant="outline">
                                 {row.netOperations === 1
                                   ? "Suma al tramo"

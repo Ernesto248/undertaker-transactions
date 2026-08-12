@@ -164,6 +164,10 @@ function mapAssignmentRow(row: any): RemeseroDetailAssignment {
     assignedAt: new Date(row.assignedAt).toISOString(),
     unassignedAt: row.unassignedAt == null ? null : new Date(row.unassignedAt).toISOString(),
     isActive: row.unassignedAt == null,
+    transactionDeletedAt:
+      row.transactionDeletedAt == null
+        ? null
+        : new Date(row.transactionDeletedAt).toISOString(),
   };
 }
 
@@ -238,6 +242,7 @@ export async function GET(
       `SELECT a.id as "assignmentId", a.transaction_id as "transactionId",
               t.actor_name as "senderName", b.name as bank, g.account_name as "accountName",
               t.confirmation_code as "confirmationCode", t.amount as "transactionAmount",
+              t.deleted_at as "transactionDeletedAt",
               a.amount_usd as "amountUsd", a.price_applied as "priceApplied",
               a.debt_amount as "debtAmount", a.assigned_at as "assignedAt",
               a.unassigned_at as "unassignedAt"

@@ -52,6 +52,9 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [transactions, setTransactions] =
     useState<Transaction[]>(initialTransactions);
+  const [deletedTransactions, setDeletedTransactions] = useState<Transaction[]>([]);
+  const [transactionView, setTransactionView] = useState<"active" | "deleted">("active");
+  const [isLoadingDeletedTransactions, setIsLoadingDeletedTransactions] = useState(false);
   const [accounts, setAccounts] = useState<AccountBalance[]>([]);
   const [movementsByAccount, setMovementsByAccount] = useState<
     Record<string, AccountMovement[]>
@@ -246,6 +249,33 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
 
     await Promise.all([refreshAccounts(), loadAccountMovements(accountId)]);
     return true;
+  };
+
+  const refreshDeletedTransactions = async () => {
+    setIsLoadingDeletedTransactions(true);
+    try {
+      const res = await fetch(apiUrl("/api/transactions?status=deleted"), {
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        ok?: boolean;
+        transactions?: Transaction[];
+      };
+      if (data.ok && Array.isArray(data.transactions)) {
+        setDeletedTransactions(data.transactions);
+      }
+    } finally {
+      setIsLoadingDeletedTransactions(false);
+    }
+  };
+
+  const handleTransactionLifecycleCompleted = async () => {
+    await Promise.all([
+      refreshTransactions(),
+      refreshDeletedTransactions(),
+      refreshAccounts(),
+    ]);
   };
 
   const revertAccountMovement = async (
@@ -807,62 +837,106 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
                       Transacciones
                     </h2>
                     <p className="text-sm text-muted-foreground">
-                      {filteredTransactions.length} de {transactions.length}{" "}
-                      transacciones
+                      {transactionView === "active"
+                        ? `${filteredTransactions.length} de ${transactions.length} transacciones`
+                        : `${deletedTransactions.length} transacciones eliminadas`}
                     </p>
                   </div>
-                  <Button
-                    type="button"
-                    onClick={() => handleCreateDialogOpenChange(true)}
-                    className="w-full sm:w-auto"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Nueva transaccion
-                  </Button>
+                  <div className="grid grid-cols-2 gap-2 sm:flex">
+                    <Button
+                      type="button"
+                      variant={transactionView === "active" ? "default" : "outline"}
+                      onClick={() => setTransactionView("active")}
+                    >
+                      Activas
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={transactionView === "deleted" ? "default" : "outline"}
+                      onClick={() => {
+                        setTransactionView("deleted");
+                        void refreshDeletedTransactions();
+                      }}
+                    >
+                      Papelera
+                    </Button>
+                    {transactionView === "active" && (
+                      <Button
+                        type="button"
+                        onClick={() => handleCreateDialogOpenChange(true)}
+                        className="col-span-2 w-full sm:w-auto"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Nueva transaccion
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
-                <FilterBar
-                  bankFilter={bankFilter}
-                  setBankFilter={setBankFilter}
-                  bankOptions={bankOptions}
-                  accountFilter={accountFilter}
-                  setAccountFilter={setAccountFilter}
-                  accountOptions={accountOptions}
-                  searchQuery={searchQuery}
-                  setSearchQuery={setSearchQuery}
-                  senderFilter={senderFilter}
-                  setSenderFilter={setSenderFilter}
-                  amountFilter={amountFilter}
-                  setAmountFilter={setAmountFilter}
-                  remeseroFilter={remeseroFilter}
-                  setRemeseroFilter={setRemeseroFilter}
-                  remeseroOptions={remeseroOptions}
-                  dateFilter={dateFilter}
-                  setDateFilter={setDateFilter}
-                  customDateRange={customDateRange}
-                  setCustomDateRange={setCustomDateRange}
-                />
+                {transactionView === "active" && (
+                  <FilterBar
+                    bankFilter={bankFilter}
+                    setBankFilter={setBankFilter}
+                    bankOptions={bankOptions}
+                    accountFilter={accountFilter}
+                    setAccountFilter={setAccountFilter}
+                    accountOptions={accountOptions}
+                    searchQuery={searchQuery}
+                    setSearchQuery={setSearchQuery}
+                    senderFilter={senderFilter}
+                    setSenderFilter={setSenderFilter}
+                    amountFilter={amountFilter}
+                    setAmountFilter={setAmountFilter}
+                    remeseroFilter={remeseroFilter}
+                    setRemeseroFilter={setRemeseroFilter}
+                    remeseroOptions={remeseroOptions}
+                    dateFilter={dateFilter}
+                    setDateFilter={setDateFilter}
+                    customDateRange={customDateRange}
+                    setCustomDateRange={setCustomDateRange}
+                  />
+                )}
 
                 <div className="grid gap-3">
-                  {filteredTransactions.map((transaction) => (
-                    <TransactionCard
-                      key={transaction.id}
-                      transaction={transaction}
-                      remeseros={remeseros}
-                      onAssign={assignTransactionToRemesero}
-                      onUnassign={unassignTransactionFromRemesero}
-                      isAssigning={
-                        assigningByTransaction[transaction.id] === true
-                      }
-                    />
-                  ))}
-                  {filteredTransactions.length === 0 && (
+                  {transactionView === "active" &&
+                    filteredTransactions.map((transaction) => (
+                      <TransactionCard
+                        key={transaction.id}
+                        transaction={transaction}
+                        remeseros={remeseros}
+                        onAssign={assignTransactionToRemesero}
+                        onUnassign={unassignTransactionFromRemesero}
+                        onDelete={handleTransactionLifecycleCompleted}
+                        isAssigning={assigningByTransaction[transaction.id] === true}
+                      />
+                    ))}
+                  {transactionView === "deleted" &&
+                    deletedTransactions.map((transaction) => (
+                      <TransactionCard
+                        key={transaction.id}
+                        transaction={transaction}
+                        onRestore={handleTransactionLifecycleCompleted}
+                      />
+                    ))}
+                  {transactionView === "active" && filteredTransactions.length === 0 && (
                     <div className="text-center py-12">
                       <p className="text-muted-foreground">
                         No se encontraron transacciones
                       </p>
                     </div>
                   )}
+                  {transactionView === "deleted" && isLoadingDeletedTransactions && (
+                    <div className="py-12 text-center text-sm text-muted-foreground">
+                      Cargando papelera...
+                    </div>
+                  )}
+                  {transactionView === "deleted" &&
+                    !isLoadingDeletedTransactions &&
+                    deletedTransactions.length === 0 && (
+                      <div className="py-12 text-center">
+                        <p className="text-muted-foreground">La papelera está vacía</p>
+                      </div>
+                    )}
                 </div>
               </div>
             )}

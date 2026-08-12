@@ -19,6 +19,11 @@ async function loadPostHandler() {
   return mod.POST;
 }
 
+async function loadGetHandler() {
+  const mod = await import("@/app/api/accounts/route");
+  return mod.GET;
+}
+
 function createClient(rowsByCall: unknown[][]) {
   const query = vi.fn();
   for (const rows of rowsByCall) query.mockResolvedValueOnce({ rows });
@@ -26,6 +31,20 @@ function createClient(rowsByCall: unknown[][]) {
   connectMock.mockResolvedValue({ query, release });
   return { query, release };
 }
+
+describe("GET /api/accounts", () => {
+  beforeEach(() => connectMock.mockReset());
+
+  it("excludes deleted transactions from account balances", async () => {
+    const { query } = createClient([[]]);
+    const GET = await loadGetHandler();
+
+    const response = await GET(new Request("http://localhost/api/accounts"));
+
+    expect(response.status).toBe(200);
+    expect(String(query.mock.calls[0][0])).toContain("deleted_at IS NULL");
+  });
+});
 
 describe("POST /api/accounts", () => {
   beforeEach(() => {
