@@ -304,6 +304,10 @@ export type FinanceExpense = {
   balanceBefore: number;
   balanceAfter: number;
   occurredAt: string;
+  cashMovementId?: string | null;
+  reversalCashMovementId?: string | null;
+  revertedAt?: string | null;
+  revertedReason?: string | null;
 };
 
 export type FinanceDebtMovement = {
@@ -330,7 +334,11 @@ export type FinanceCashMovement = {
   signedAmount: number;
   balanceBefore: number;
   balanceAfter: number;
-  operationType: "EXTERNAL_DEBT" | "REMESERO_PAYMENT" | "CURRENCY_EXCHANGE";
+  operationType:
+    | "EXTERNAL_DEBT"
+    | "REMESERO_PAYMENT"
+    | "CURRENCY_EXCHANGE"
+    | "FINANCE_EXPENSE";
   operationId: string;
   reversalOfId: string | null;
   note: string | null;

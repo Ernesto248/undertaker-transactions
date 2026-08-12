@@ -48,6 +48,7 @@ import {
 import type {
   FinanceCounterparty,
   FinanceCurrency,
+  FinanceExpense,
   FinanceMovementType,
   FinanceOverview,
 } from "@/lib/types";
@@ -150,6 +151,9 @@ export function FinancesView() {
   const [expenseAmount, setExpenseAmount] = useState("");
   const [expenseDescription, setExpenseDescription] = useState("");
   const [expenseError, setExpenseError] = useState<string | null>(null);
+  const [expenseToRevert, setExpenseToRevert] = useState<FinanceExpense | null>(null);
+  const [revertingExpense, setRevertingExpense] = useState(false);
+  const [revertExpenseError, setRevertExpenseError] = useState<string | null>(null);
   const [exchangeDirection, setExchangeDirection] = useState<"USD_TO_CUP" | "CUP_TO_USD">("USD_TO_CUP");
   const [exchangeAmount, setExchangeAmount] = useState("");
   const [exchangeRate, setExchangeRate] = useState("");
@@ -280,6 +284,32 @@ export function FinancesView() {
       await loadOverview();
     } finally {
       setSavingExpense(false);
+    }
+  };
+
+  const revertExpense = async () => {
+    if (!expenseToRevert) return;
+
+    setRevertingExpense(true);
+    setRevertExpenseError(null);
+    try {
+      const response = await fetch("/api/finances/expenses", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          expenseId: expenseToRevert.id,
+          reason: "Revertido desde Finanzas",
+        }),
+      });
+      if (!response.ok) {
+        setRevertExpenseError("No se pudo revertir el gasto.");
+        return;
+      }
+
+      setExpenseToRevert(null);
+      await loadOverview();
+    } finally {
+      setRevertingExpense(false);
     }
   };
 
@@ -554,14 +584,44 @@ export function FinancesView() {
             <CardContent className="space-y-2">
               {expenses.length === 0 ? <p className="text-sm text-muted-foreground">Sin gastos registrados.</p> : null}
               {expenses.map((expense) => (
-                <div key={expense.id} className="rounded-xl border border-border/60 p-3 text-sm">
+                <div
+                  key={expense.id}
+                  className={cn(
+                    "rounded-xl border border-border/60 p-3 text-sm",
+                    expense.revertedAt && "opacity-50",
+                  )}
+                >
                   <div className="flex items-start justify-between gap-3">
                     <p className="min-w-0 font-medium">{expense.description}</p>
-                    <p className="shrink-0 font-semibold text-amber-300">-{formatNumber(expense.amount)} {expense.currency}</p>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <p className="font-semibold text-amber-300">-{formatNumber(expense.amount)} {expense.currency}</p>
+                      {expense.revertedAt ? (
+                        <Badge variant="outline">Revertido</Badge>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Revertir gasto ${expense.description}`}
+                          onClick={() => {
+                            setRevertExpenseError(null);
+                            setExpenseToRevert(expense);
+                          }}
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {formatDate(expense.occurredAt)} · Saldo {formatNumber(expense.balanceBefore)} → {formatNumber(expense.balanceAfter)}
                   </p>
+                  {expense.revertedAt ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Revertido {formatDate(expense.revertedAt)}
+                      {expense.revertedReason ? ` · ${expense.revertedReason}` : ""}
+                    </p>
+                  ) : null}
                 </div>
               ))}
             </CardContent>
@@ -823,6 +883,40 @@ export function FinancesView() {
               }}
             >
               {deletingCounterparty ? "Eliminando..." : "Eliminar definitivamente"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={expenseToRevert !== null}
+        onOpenChange={(open) => {
+          if (!open && !revertingExpense) {
+            setExpenseToRevert(null);
+            setRevertExpenseError(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revertir gasto</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se devolverán {expenseToRevert ? formatNumber(expenseToRevert.amount) : "0"} {expenseToRevert?.currency ?? ""} al balance actual. El gasto permanecerá visible como revertido para conservar la auditoría.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {revertExpenseError ? (
+            <p role="alert" className="text-sm text-destructive">{revertExpenseError}</p>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={revertingExpense}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={revertingExpense}
+              onClick={(event) => {
+                event.preventDefault();
+                void revertExpense();
+              }}
+            >
+              {revertingExpense ? "Revirtiendo..." : "Confirmar reversión"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

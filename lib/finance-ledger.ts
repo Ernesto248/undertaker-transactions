@@ -7,7 +7,8 @@ export type FinanceQueryClient = {
 export type CashOperationType =
   | "EXTERNAL_DEBT"
   | "REMESERO_PAYMENT"
-  | "CURRENCY_EXCHANGE";
+  | "CURRENCY_EXCHANGE"
+  | "FINANCE_EXPENSE";
 
 export function roundMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;

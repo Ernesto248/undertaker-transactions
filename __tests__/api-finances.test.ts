@@ -209,9 +209,9 @@ describe("finance APIs", () => {
     const client = createClient([
       [],
       [{ cashUsd: 1000, cashCup: 5000 }],
+      [{ id: "cash-1", balanceBefore: 1000, balanceAfter: 749.5 }],
+      [],
       [{ id: "e-1", currency: "USD", amount: 250.5, description: "Renta", balanceBefore: 1000, balanceAfter: 749.5, occurredAt: "2026-08-07T10:00:00.000Z" }],
-      [],
-      [],
       [],
     ]);
     const { POST } = await import("@/app/api/finances/expenses/route");
@@ -224,8 +224,8 @@ describe("finance APIs", () => {
     expect(response.status).toBe(201);
     expect((await response.json()).expense.balanceAfter).toBe(749.5);
     expect(client.query.mock.calls.some(([sql]) => String(sql).includes("INSERT INTO finance_expenses"))).toBe(true);
+    expect(client.query.mock.calls.some(([sql]) => String(sql).includes("INSERT INTO finance_cash_movements"))).toBe(true);
     expect(client.query.mock.calls.some(([sql]) => String(sql).includes("UPDATE finance_state"))).toBe(true);
-    expect(client.query.mock.calls.some(([sql]) => String(sql).includes("INSERT INTO finance_state_changes"))).toBe(true);
     expect(client.query.mock.calls.at(-1)?.[0]).toBe("COMMIT");
   });
 
@@ -233,9 +233,9 @@ describe("finance APIs", () => {
     const client = createClient([
       [],
       [{ cashUsd: 100, cashCup: 5000 }],
+      [{ id: "cash-2", balanceBefore: 100, balanceAfter: -50 }],
+      [],
       [{ id: "e-2", currency: "USD", amount: 150, description: "Renta", balanceBefore: 100, balanceAfter: -50, occurredAt: "2026-08-07T10:00:00.000Z" }],
-      [],
-      [],
       [],
     ]);
     const { POST } = await import("@/app/api/finances/expenses/route");
@@ -248,6 +248,42 @@ describe("finance APIs", () => {
     expect(response.status).toBe(201);
     expect((await response.json()).expense.balanceAfter).toBe(-50);
     expect(client.query.mock.calls.some(([sql]) => String(sql).includes("INSERT INTO finance_expenses"))).toBe(true);
+    expect(client.query.mock.calls.at(-1)?.[0]).toBe("COMMIT");
+  });
+
+  it("reverses an expense with an inverse cash movement and keeps its audit record", async () => {
+    const expenseId = "42f1f24a-2594-4ddd-bbce-31f662c39ef2";
+    const cashMovementId = "52f1f24a-2594-4ddd-bbce-31f662c39ef2";
+    const reversalId = "62f1f24a-2594-4ddd-bbce-31f662c39ef2";
+    const client = createClient([
+      [],
+      [{ id: expenseId, currency: "USD", amount: 250, description: "Renta", cashMovementId }],
+      [{ id: cashMovementId, currency: "USD", signedAmount: -250, operationType: "FINANCE_EXPENSE", operationId: expenseId }],
+      [{ cashUsd: 750 }],
+      [{ id: reversalId, currency: "USD", signedAmount: 250, balanceBefore: 750, balanceAfter: 1000, operationType: "FINANCE_EXPENSE", operationId: expenseId, reversalOfId: cashMovementId, occurredAt: "2026-08-07T11:00:00.000Z" }],
+      [],
+      [{ id: expenseId, currency: "USD", amount: 250, description: "Renta", balanceBefore: 1000, balanceAfter: 750, cashMovementId, reversalCashMovementId: reversalId, occurredAt: "2026-08-07T10:00:00.000Z", revertedAt: "2026-08-07T11:00:00.000Z", revertedReason: "Duplicado" }],
+      [],
+    ]);
+
+    const { DELETE } = await import("@/app/api/finances/expenses/route");
+    const response = await DELETE(new Request("http://localhost/api/finances/expenses", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ expenseId, reason: "Duplicado" }),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      ok: true,
+      expense: { id: expenseId, revertedAt: "2026-08-07T11:00:00.000Z" },
+    });
+    const reversalInsert = client.query.mock.calls.find(([sql]) =>
+      String(sql).includes("INSERT INTO finance_cash_movements"),
+    );
+    expect(reversalInsert?.[1]?.[1]).toBe(250);
+    expect(client.query.mock.calls.some(([sql]) => String(sql).includes("UPDATE finance_expenses"))).toBe(true);
+    expect(client.query.mock.calls.every(([sql]) => !String(sql).includes("DELETE FROM finance_expenses"))).toBe(true);
     expect(client.query.mock.calls.at(-1)?.[0]).toBe("COMMIT");
   });
 });

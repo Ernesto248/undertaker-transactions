@@ -242,4 +242,51 @@ describe("FinancesView", () => {
     });
     expect(await screen.findByText("-10,000.5 CUP")).toBeTruthy();
   });
+
+  it("reverses an expense from its audit card", async () => {
+    const activeExpense = {
+      id: "42f1f24a-2594-4ddd-bbce-31f662c39ef2",
+      currency: "USD" as const,
+      amount: 250,
+      description: "Renta",
+      balanceBefore: 1000,
+      balanceAfter: 750,
+      occurredAt: "2026-08-07T10:00:00.000Z",
+      revertedAt: null,
+      revertedReason: null,
+    };
+    const expenseOverview: FinanceOverview = {
+      ...overview,
+      expenses: [activeExpense],
+    };
+    const revertedOverview: FinanceOverview = {
+      ...expenseOverview,
+      settings: { ...expenseOverview.settings, cashUsd: 1000 },
+      expenses: [{
+        ...activeExpense,
+        revertedAt: "2026-08-07T11:00:00.000Z",
+        revertedReason: "Revertido desde Finanzas",
+      }],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, overview: expenseOverview }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, overview: revertedOverview }) });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<FinancesView />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Revertir gasto Renta" }));
+    expect(await screen.findByRole("heading", { name: "Revertir gasto" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar reversión" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/finances/expenses");
+    expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: "DELETE" });
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+      expenseId: activeExpense.id,
+      reason: "Revertido desde Finanzas",
+    });
+    expect((await screen.findAllByText("Revertido")).length).toBeGreaterThan(0);
+  });
 });

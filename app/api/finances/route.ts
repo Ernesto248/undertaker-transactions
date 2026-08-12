@@ -93,7 +93,10 @@ export async function GET() {
         client.query(`
           SELECT id, currency, amount, description,
                  balance_before as "balanceBefore", balance_after as "balanceAfter",
-                 occurred_at as "occurredAt"
+                 cash_movement_id as "cashMovementId",
+                 reversal_cash_movement_id as "reversalCashMovementId",
+                 occurred_at as "occurredAt", reverted_at as "revertedAt",
+                 reverted_reason as "revertedReason"
           FROM finance_expenses
           ORDER BY occurred_at DESC, created_at DESC
           LIMIT 10
@@ -201,6 +204,11 @@ export async function GET() {
       balanceBefore: toNumber(row.balanceBefore),
       balanceAfter: toNumber(row.balanceAfter),
       occurredAt: new Date(row.occurredAt).toISOString(),
+      cashMovementId: row.cashMovementId == null ? null : String(row.cashMovementId),
+      reversalCashMovementId:
+        row.reversalCashMovementId == null ? null : String(row.reversalCashMovementId),
+      revertedAt: row.revertedAt == null ? null : new Date(row.revertedAt).toISOString(),
+      revertedReason: row.revertedReason == null ? null : String(row.revertedReason),
     }));
 
     const cashMovements: FinanceCashMovement[] = cashMovementsResult.rows.map((row: any) => ({
