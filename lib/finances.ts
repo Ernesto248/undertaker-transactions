@@ -59,6 +59,17 @@ export function calculateCapitalTotal(input: {
 export function emptyFinanceTotals(): FinanceOverviewTotals {
   return {
     zelleUsd: 0,
+    zelleValuation: {
+      balanceUsd: 0,
+      inventoryUsd: 0,
+      deficitUsd: 0,
+      pricedUsd: 0,
+      unpricedUsd: 0,
+      costCup: 0,
+      averagePrice: null,
+      coveragePercent: 0,
+      accounts: [],
+    },
     remeseros: {
       receivableCup: 0,
       payableCup: 0,

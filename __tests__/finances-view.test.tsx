@@ -12,6 +12,28 @@ const overview: FinanceOverview = {
   },
   totals: {
     zelleUsd: 500,
+    zelleValuation: {
+      balanceUsd: 500,
+      inventoryUsd: 500,
+      deficitUsd: 0,
+      pricedUsd: 400,
+      unpricedUsd: 100,
+      costCup: 272000,
+      averagePrice: 680,
+      coveragePercent: 80,
+      accounts: [{
+        accountId: "a-1",
+        accountName: "Cuenta principal",
+        balanceUsd: 500,
+        inventoryUsd: 500,
+        deficitUsd: 0,
+        pricedUsd: 400,
+        unpricedUsd: 100,
+        costCup: 272000,
+        averagePrice: 680,
+        coveragePercent: 80,
+      }],
+    },
     remeseros: {
       receivableCup: 16000,
       payableCup: 100000,

@@ -1,9 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const connectMock = vi.fn();
+const { loadZelleInventoriesMock, summarizeZelleInventoriesMock } = vi.hoisted(() => ({
+  loadZelleInventoriesMock: vi.fn(),
+  summarizeZelleInventoriesMock: vi.fn(),
+}));
 vi.mock("@/lib/db", () => ({
   getPool: () => ({ connect: connectMock }),
   withRetry: async <T,>(operation: () => Promise<T>) => operation(),
+}));
+vi.mock("@/lib/zelle-inventory", () => ({
+  loadZelleInventories: loadZelleInventoriesMock,
+  summarizeZelleInventories: summarizeZelleInventoriesMock,
 }));
 
 function createClient(results: unknown[][]) {
@@ -14,12 +22,29 @@ function createClient(results: unknown[][]) {
 }
 
 describe("finance APIs", () => {
-  beforeEach(() => connectMock.mockReset());
+  beforeEach(() => {
+    connectMock.mockReset();
+    loadZelleInventoriesMock.mockReset();
+    summarizeZelleInventoriesMock.mockReset();
+    loadZelleInventoriesMock.mockResolvedValue([]);
+    summarizeZelleInventoriesMock.mockReturnValue({
+      summary: {
+        balanceUsd: 500,
+        inventoryUsd: 500,
+        deficitUsd: 0,
+        pricedUsd: 400,
+        unpricedUsd: 100,
+        costCup: 272000,
+        averagePrice: 680,
+        coveragePercent: 80,
+      },
+      accounts: [],
+    });
+  });
 
   it("returns a complete overview from authoritative sources", async () => {
     const client = createClient([
       [{ cashUsd: 100, cashCup: 42000, usdCupRate: 420, updatedAt: "2026-08-07T10:00:00.000Z" }],
-      [{ zelleUsd: 500 }],
       [{ receivableCup: 16000, payableCup: 100000, netCup: -84000 }],
       [
         { id: "c-1", name: "Miguel", balanceUsd: 25, balanceCup: 10000, archivedAt: null, createdAt: "2026-08-07T10:00:00.000Z", updatedAt: "2026-08-07T10:00:00.000Z" },
@@ -50,15 +75,14 @@ describe("finance APIs", () => {
       balanceAfter: 41500,
     });
     expect(json.overview.counterparties[0].movements[0].signedAmount).toBe(25);
-    expect(client.query.mock.calls[2][0]).toContain("GREATEST(-deuda_actual, 0)");
-    expect(client.query.mock.calls[2][0]).toContain("-SUM(deuda_actual)");
+    expect(client.query.mock.calls[1][0]).toContain("GREATEST(-deuda_actual, 0)");
+    expect(client.query.mock.calls[1][0]).toContain("-SUM(deuda_actual)");
     expect(client.release).toHaveBeenCalledOnce();
   });
 
   it("returns capital pending when the rate is empty", async () => {
     createClient([
       [{ cashUsd: 100, cashCup: 0, usdCupRate: null, updatedAt: "2026-08-07T10:00:00.000Z" }],
-      [{ zelleUsd: 500 }],
       [{ receivableCup: 0, payableCup: 0, netCup: 0 }],
       [],
       [],

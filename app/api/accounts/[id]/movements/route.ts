@@ -5,6 +5,13 @@ import type { AccountMovement } from "@/lib/types";
 export const runtime = "nodejs";
 
 function mapMovementRow(row: any): AccountMovement {
+  const fifoPricedUsd = Number(row.fifoPricedUsd ?? 0);
+  const fifoUnpricedUsd = Number(row.fifoUnpricedUsd ?? 0);
+  const fifoRemainingPricedUsd = Number(row.fifoRemainingPricedUsd ?? 0);
+  const fifoRemainingUnpricedUsd = Number(row.fifoRemainingUnpricedUsd ?? 0);
+  const fifoSelectedUsd = fifoPricedUsd + fifoUnpricedUsd;
+  const fifoRemainingUsd = fifoRemainingPricedUsd + fifoRemainingUnpricedUsd;
+
   return {
     id: String(row.id),
     accountId: String(row.accountId),
@@ -21,6 +28,34 @@ function mapMovementRow(row: any): AccountMovement {
     feePercent: row.feePercent == null ? null : Number(row.feePercent),
     debtAmount: row.debtAmount == null ? null : Number(row.debtAmount),
     financeDebtMovementId: row.financeDebtMovementId == null ? null : String(row.financeDebtMovementId),
+    fifoValuation: row.fifoMethod === "FIFO_PER_ACCOUNT" && row.fifoValuedAt
+      ? {
+          method: "FIFO_PER_ACCOUNT",
+          valuedAt: new Date(row.fifoValuedAt).toISOString(),
+          balanceBeforeUsd: Number(row.fifoBalanceBeforeUsd ?? 0),
+          balanceAfterUsd: Number(row.fifoBalanceAfterUsd ?? 0),
+          selected: {
+            balanceUsd: fifoSelectedUsd,
+            inventoryUsd: fifoSelectedUsd,
+            deficitUsd: 0,
+            pricedUsd: fifoPricedUsd,
+            unpricedUsd: fifoUnpricedUsd,
+            costCup: Number(row.fifoCostCup ?? 0),
+            averagePrice: row.fifoAveragePrice == null ? null : Number(row.fifoAveragePrice),
+            coveragePercent: fifoSelectedUsd > 0 ? (fifoPricedUsd / fifoSelectedUsd) * 100 : 0,
+          },
+          remaining: {
+            balanceUsd: fifoRemainingUsd,
+            inventoryUsd: fifoRemainingUsd,
+            deficitUsd: 0,
+            pricedUsd: fifoRemainingPricedUsd,
+            unpricedUsd: fifoRemainingUnpricedUsd,
+            costCup: Number(row.fifoRemainingCostCup ?? 0),
+            averagePrice: row.fifoRemainingAveragePrice == null ? null : Number(row.fifoRemainingAveragePrice),
+            coveragePercent: fifoRemainingUsd > 0 ? (fifoRemainingPricedUsd / fifoRemainingUsd) * 100 : 0,
+          },
+        }
+      : null,
   };
 }
 
@@ -95,7 +130,19 @@ export async function GET(request: Request, { params }: Params) {
         m.conversion_rate as "conversionRate",
         m.fee_percent as "feePercent",
         m.debt_amount as "debtAmount",
-        m.finance_debt_movement_id as "financeDebtMovementId"
+        m.finance_debt_movement_id as "financeDebtMovementId",
+        m.fifo_method as "fifoMethod",
+        m.fifo_valued_at as "fifoValuedAt",
+        m.fifo_balance_before_usd as "fifoBalanceBeforeUsd",
+        m.fifo_balance_after_usd as "fifoBalanceAfterUsd",
+        m.fifo_priced_usd as "fifoPricedUsd",
+        m.fifo_unpriced_usd as "fifoUnpricedUsd",
+        m.fifo_cost_cup as "fifoCostCup",
+        m.fifo_average_price as "fifoAveragePrice",
+        m.fifo_remaining_priced_usd as "fifoRemainingPricedUsd",
+        m.fifo_remaining_unpriced_usd as "fifoRemainingUnpricedUsd",
+        m.fifo_remaining_cost_cup as "fifoRemainingCostCup",
+        m.fifo_remaining_average_price as "fifoRemainingAveragePrice"
       FROM account_outflow_movements m
       LEFT JOIN finance_counterparties counterparty ON counterparty.id = m.counterparty_id
       WHERE m.gmail_account_id = $1

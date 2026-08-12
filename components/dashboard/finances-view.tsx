@@ -485,6 +485,68 @@ export function FinancesView() {
         ))}
       </div>
 
+      <Card className="overflow-hidden border-sky-500/25 bg-gradient-to-br from-sky-500/10 via-card to-card">
+        <CardHeader>
+          <CardTitle>Valoración FIFO del Zelle</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+              <p className="text-xs text-muted-foreground">Precio promedio</p>
+              <p className="mt-1 text-lg font-semibold">
+                {totals.zelleValuation.averagePrice == null
+                  ? "Sin valoración"
+                  : `${formatNumber(totals.zelleValuation.averagePrice)} CUP/USD`}
+              </p>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+              <p className="text-xs text-muted-foreground">Costo valorado</p>
+              <p className="mt-1 text-lg font-semibold">{formatNumber(totals.zelleValuation.costCup)} CUP</p>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+              <p className="text-xs text-muted-foreground">Cobertura</p>
+              <p className="mt-1 text-lg font-semibold">{formatNumber(totals.zelleValuation.coveragePercent)}%</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {formatNumber(totals.zelleValuation.pricedUsd)} de {formatNumber(totals.zelleValuation.inventoryUsd)} USD
+              </p>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+              <p className="text-xs text-muted-foreground">Sin precio / déficit</p>
+              <p className="mt-1 text-lg font-semibold text-amber-300">
+                {formatNumber(totals.zelleValuation.unpricedUsd)} USD
+              </p>
+              {totals.zelleValuation.deficitUsd > 0 ? (
+                <p className="mt-1 text-xs text-red-400">Déficit: {formatNumber(totals.zelleValuation.deficitUsd)} USD</p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="grid gap-2 md:grid-cols-2">
+            {totals.zelleValuation.accounts.map((account) => (
+              <div key={account.accountId} className="rounded-xl border border-border/60 bg-background/40 p-3 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{account.accountName}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {formatNumber(account.pricedUsd)} valorados · {formatNumber(account.unpricedUsd)} sin precio
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="font-semibold">{formatNumber(account.balanceUsd)} USD</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {account.averagePrice == null ? "Sin promedio" : `${formatNumber(account.averagePrice)} CUP/USD`}
+                    </p>
+                  </div>
+                </div>
+                {account.deficitUsd > 0 ? (
+                  <p className="mt-2 text-xs text-red-400">Déficit: {formatNumber(account.deficitUsd)} USD</p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="space-y-6">
           <Card>

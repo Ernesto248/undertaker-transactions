@@ -242,9 +242,10 @@ export function Dashboard({ initialTransactions }: DashboardProps) {
       }),
     });
 
-    if (!res.ok) return;
+    if (!res.ok) return false;
 
     await Promise.all([refreshAccounts(), loadAccountMovements(accountId)]);
+    return true;
   };
 
   const revertAccountMovement = async (

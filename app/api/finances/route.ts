@@ -3,6 +3,10 @@ import {
   calculateCapitalTotal,
   signedFinanceAmount,
 } from "@/lib/finances";
+import {
+  loadZelleInventories,
+  summarizeZelleInventories,
+} from "@/lib/zelle-inventory";
 import type {
   FinanceCounterparty,
   FinanceCashMovement,
@@ -25,30 +29,14 @@ export async function GET() {
   const client = await getPool().connect();
 
   try {
-    const [stateResult, zelleResult, remeserosResult, counterpartiesResult, movementsResult, changesResult, expensesResult, cashMovementsResult, exchangesResult] =
+    const [stateResult, zelleInventories, remeserosResult, counterpartiesResult, movementsResult, changesResult, expensesResult, cashMovementsResult, exchangesResult] =
       await Promise.all([
         client.query(`
           SELECT cash_usd as "cashUsd", cash_cup as "cashCup",
                  usd_cup_rate as "usdCupRate", updated_at as "updatedAt"
           FROM finance_state WHERE id = 1
         `),
-        client.query(`
-          SELECT COALESCE(SUM(
-            (COALESCE(tx.total_incoming, 0) + COALESCE(g.incoming_adjustment, 0))
-            - (COALESCE(m.total_outgoing, 0) + COALESCE(g.outgoing_adjustment, 0))
-          ), 0) as "zelleUsd"
-          FROM gmail_accounts g
-          LEFT JOIN (
-            SELECT gmail_account_id, SUM(amount) as total_incoming
-            FROM transactions GROUP BY gmail_account_id
-          ) tx ON tx.gmail_account_id = g.id
-          LEFT JOIN (
-            SELECT gmail_account_id, SUM(amount) as total_outgoing
-            FROM account_outflow_movements
-            WHERE reverted_at IS NULL
-            GROUP BY gmail_account_id
-          ) m ON m.gmail_account_id = g.id
-        `),
+        loadZelleInventories(client),
         client.query(`
           SELECT
             COALESCE(SUM(GREATEST(-deuda_actual, 0)), 0) as "receivableCup",
@@ -193,6 +181,8 @@ export async function GET() {
     const remeseroRow = remeserosResult.rows[0] ?? {};
     const remeserosNetCup = toNumber(remeseroRow.netCup);
     const rate = settings.usdCupRate;
+    const zelleValuation = summarizeZelleInventories(zelleInventories);
+    const zelleUsd = zelleValuation.summary.balanceUsd;
 
     const settingChanges: FinanceSettingChange[] = changesResult.rows.map((row: any) => ({
       id: String(row.id),
@@ -246,7 +236,11 @@ export async function GET() {
       cashMovements,
       exchanges,
       totals: {
-        zelleUsd: toNumber(zelleResult.rows[0]?.zelleUsd),
+        zelleUsd,
+        zelleValuation: {
+          ...zelleValuation.summary,
+          accounts: zelleValuation.accounts,
+        },
         remeseros: {
           receivableCup: toNumber(remeseroRow.receivableCup),
           payableCup: toNumber(remeseroRow.payableCup),
@@ -263,7 +257,7 @@ export async function GET() {
           cashUsd: settings.cashUsd,
           cashCup: settings.cashCup,
           usdCupRate: rate,
-          zelleUsd: toNumber(zelleResult.rows[0]?.zelleUsd),
+          zelleUsd,
           remeserosNetCup,
           externalNetUsd,
           externalNetCup,

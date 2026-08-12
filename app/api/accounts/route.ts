@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { getPool } from "@/lib/db";
 import { ACTIVE_DEBT_DELTA_SQL, roundMoney } from "@/lib/finance-ledger";
-import type { AccountBalance } from "@/lib/types";
+import type { AccountBalance, WireFifoSnapshot } from "@/lib/types";
+import { loadZelleInventories, previewWire } from "@/lib/zelle-inventory";
 
 export const runtime = "nodejs";
 
@@ -20,7 +21,8 @@ const MovementBaseSchema = z.object({
     .refine(
       (value) => Number.isFinite(value) && value > 0,
       "amount must be > 0",
-    ),
+    )
+    .transform(roundMoney),
   note: OptionalStringSchema,
 });
 
@@ -176,8 +178,48 @@ export async function POST(request: Request) {
     const movementId = randomUUID();
     let debtAmount: number | null = null;
     let financeDebtMovementId: string | null = null;
+    let fifoValuation: WireFifoSnapshot | null = null;
+
+    const accountResult = await client.query(
+      `SELECT id FROM gmail_accounts WHERE id = $1 FOR UPDATE`,
+      [parsed.data.accountId],
+    );
+    if (!accountResult.rows[0]?.id) {
+      await client.query("ROLLBACK");
+      return Response.json(
+        { ok: false, error: "account_not_found" },
+        { status: 404 },
+      );
+    }
 
     if (parsed.data.movementType === "wire") {
+      const inventories = await loadZelleInventories(client, parsed.data.accountId);
+      const inventory = inventories[0];
+      const valuationPreview = inventory
+        ? previewWire(inventory, parsed.data.amount)
+        : null;
+
+      if (!valuationPreview?.canCreate) {
+        await client.query("ROLLBACK");
+        return Response.json(
+          {
+            ok: false,
+            error: "insufficient_account_balance",
+            availableUsd: valuationPreview?.availableUsd ?? 0,
+          },
+          { status: 409 },
+        );
+      }
+
+      fifoValuation = {
+        method: "FIFO_PER_ACCOUNT",
+        valuedAt: new Date().toISOString(),
+        balanceBeforeUsd: valuationPreview.availableUsd,
+        balanceAfterUsd: valuationPreview.remaining.balanceUsd,
+        selected: valuationPreview.selected,
+        remaining: valuationPreview.remaining,
+      };
+
       const counterpartyResult = await client.query(
         `SELECT id FROM finance_counterparties
          WHERE id = $1 AND archived_at IS NULL FOR UPDATE`,
@@ -227,8 +269,14 @@ export async function POST(request: Request) {
       `INSERT INTO account_outflow_movements
          (id, gmail_account_id, movement_type, amount, note, counterparty_id,
           settlement_currency, conversion_rate, fee_percent, debt_amount,
-          finance_debt_movement_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+          finance_debt_movement_id, fifo_method, fifo_valued_at,
+          fifo_balance_before_usd, fifo_balance_after_usd,
+          fifo_priced_usd, fifo_unpriced_usd, fifo_cost_cup,
+          fifo_average_price, fifo_remaining_priced_usd,
+          fifo_remaining_unpriced_usd, fifo_remaining_cost_cup,
+          fifo_remaining_average_price)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+               $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)`,
       [
         movementId,
         parsed.data.accountId,
@@ -243,13 +291,25 @@ export async function POST(request: Request) {
           ? parsed.data.feePercent : null,
         debtAmount,
         financeDebtMovementId,
+        fifoValuation?.method ?? null,
+        fifoValuation?.valuedAt ?? null,
+        fifoValuation?.balanceBeforeUsd ?? null,
+        fifoValuation?.balanceAfterUsd ?? null,
+        fifoValuation?.selected.pricedUsd ?? null,
+        fifoValuation?.selected.unpricedUsd ?? null,
+        fifoValuation?.selected.costCup ?? null,
+        fifoValuation?.selected.averagePrice ?? null,
+        fifoValuation?.remaining.pricedUsd ?? null,
+        fifoValuation?.remaining.unpricedUsd ?? null,
+        fifoValuation?.remaining.costCup ?? null,
+        fifoValuation?.remaining.averagePrice ?? null,
       ],
     );
 
     await client.query("COMMIT");
 
     return Response.json(
-      { ok: true, movementId, financeDebtMovementId, debtAmount },
+      { ok: true, movementId, financeDebtMovementId, debtAmount, fifoValuation },
       { status: 201 },
     );
   } catch (err: any) {
@@ -294,6 +354,25 @@ export async function DELETE(request: Request) {
 
   try {
     await client.query("BEGIN");
+    const accountLookup = await client.query(
+      `SELECT gmail_account_id as "accountId"
+       FROM account_outflow_movements
+       WHERE id = $1 AND reverted_at IS NULL`,
+      [parsed.data.movementId],
+    );
+    if (!accountLookup.rows[0]?.accountId) {
+      await client.query("ROLLBACK");
+      return Response.json(
+        { ok: false, error: "movement_not_found_or_already_reverted" },
+        { status: 404 },
+      );
+    }
+
+    await client.query(
+      `SELECT id FROM gmail_accounts WHERE id = $1 FOR UPDATE`,
+      [accountLookup.rows[0].accountId],
+    );
+
     const currentResult = await client.query(
       `SELECT id, finance_debt_movement_id as "financeDebtMovementId"
        FROM account_outflow_movements

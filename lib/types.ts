@@ -184,6 +184,42 @@ export type AccountBalance = {
   lastTransactionAt: string | null;
 };
 
+export type ZelleValuationSummary = {
+  balanceUsd: number;
+  inventoryUsd: number;
+  deficitUsd: number;
+  pricedUsd: number;
+  unpricedUsd: number;
+  costCup: number;
+  averagePrice: number | null;
+  coveragePercent: number;
+};
+
+export type ZelleAccountValuation = ZelleValuationSummary & {
+  accountId: string;
+  accountName: string;
+};
+
+export type WireFifoSnapshot = {
+  method: "FIFO_PER_ACCOUNT";
+  valuedAt: string;
+  balanceBeforeUsd: number;
+  balanceAfterUsd: number;
+  selected: ZelleValuationSummary;
+  remaining: ZelleValuationSummary;
+};
+
+export type WireFifoPreview = {
+  accountId: string;
+  accountName: string;
+  requestedUsd: number;
+  availableUsd: number;
+  canCreate: boolean;
+  error: "insufficient_account_balance" | null;
+  selected: ZelleValuationSummary;
+  remaining: ZelleValuationSummary;
+};
+
 export type AccountMovement = {
   id: string;
   accountId: string;
@@ -200,6 +236,7 @@ export type AccountMovement = {
   feePercent?: number | null;
   debtAmount?: number | null;
   financeDebtMovementId?: string | null;
+  fifoValuation?: WireFifoSnapshot | null;
 };
 
 export type FinanceCurrency = "USD" | "CUP";
@@ -296,6 +333,9 @@ export type FinanceCounterparty = {
 
 export type FinanceOverviewTotals = {
   zelleUsd: number;
+  zelleValuation: ZelleValuationSummary & {
+    accounts: ZelleAccountValuation[];
+  };
   remeseros: {
     receivableCup: number;
     payableCup: number;

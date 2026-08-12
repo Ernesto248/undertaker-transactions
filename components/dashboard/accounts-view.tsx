@@ -19,6 +19,7 @@ import type {
   AccountMovement,
   AccountMovementType,
   FinanceCurrency,
+  WireFifoPreview,
 } from "@/lib/types";
 
 type AccountMovementInput = {
@@ -41,7 +42,7 @@ type AccountsViewProps = {
   onCreateMovement: (
     accountId: string,
     input: AccountMovementInput,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   onRevertMovement: (
     accountId: string,
     movementId: string,
@@ -81,6 +82,8 @@ export function AccountsView({
     >
   >({});
   const [counterparties, setCounterparties] = useState<Array<{ id: string; name: string }>>([]);
+  const [fifoPreviewByAccount, setFifoPreviewByAccount] = useState<Record<string, WireFifoPreview | null>>({});
+  const [loadingFifoPreviewByAccount, setLoadingFifoPreviewByAccount] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     let active = true;
@@ -94,6 +97,56 @@ export function AccountsView({
       .catch(() => undefined);
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    const controllers: AbortController[] = [];
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    for (const account of accounts) {
+      const draft = draftByAccount[account.id];
+      const amount = parseFinanceNumberInput(draft?.amount ?? "");
+      const shouldLoad = expandedById[account.id] === true
+        && (draft?.movementType ?? "wire") === "wire"
+        && Number.isFinite(amount)
+        && amount > 0;
+
+      if (!shouldLoad) {
+        setFifoPreviewByAccount((previous) => ({ ...previous, [account.id]: null }));
+        setLoadingFifoPreviewByAccount((previous) => ({ ...previous, [account.id]: false }));
+        continue;
+      }
+
+      setLoadingFifoPreviewByAccount((previous) => ({ ...previous, [account.id]: true }));
+      setFifoPreviewByAccount((previous) => ({ ...previous, [account.id]: null }));
+      const controller = new AbortController();
+      controllers.push(controller);
+      timers.push(setTimeout(() => {
+        void fetch(`/api/accounts/${account.id}/wire-preview?amount=${encodeURIComponent(amount)}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        })
+          .then(async (response) => response.ok ? response.json() : null)
+          .then((payload) => {
+            if (payload?.ok && payload.preview) {
+              setFifoPreviewByAccount((previous) => ({ ...previous, [account.id]: payload.preview }));
+            } else {
+              setFifoPreviewByAccount((previous) => ({ ...previous, [account.id]: null }));
+            }
+          })
+          .catch(() => undefined)
+          .finally(() => {
+            if (!controller.signal.aborted) {
+              setLoadingFifoPreviewByAccount((previous) => ({ ...previous, [account.id]: false }));
+            }
+          });
+      }, 300));
+    }
+
+    return () => {
+      timers.forEach(clearTimeout);
+      controllers.forEach((controller) => controller.abort());
+    };
+  }, [accounts, draftByAccount, expandedById]);
 
   const totals = useMemo(() => {
     const totalBalance = accounts.reduce(
@@ -163,7 +216,7 @@ export function AccountsView({
     setLoadingByAccount((prev) => ({ ...prev, [accountId]: true }));
 
     try {
-      await onCreateMovement(accountId, {
+      const created = await onCreateMovement(accountId, {
         movementType: draft.movementType,
         amount,
         note: draft.note.trim() || undefined,
@@ -174,6 +227,7 @@ export function AccountsView({
           feePercent: draft.settlementCurrency === "USD" ? feePercent : undefined,
         } : {}),
       });
+      if (!created) return;
       setDraftByAccount((prev) => ({
         ...prev,
         [accountId]: {
@@ -287,7 +341,15 @@ export function AccountsView({
                 ? draftAmount * (1 + draftPercent / 100)
                 : null
             : null;
+          const wireFieldsValid = draft.movementType !== "wire" || (
+            draft.counterpartyId.length > 0
+            && (draft.settlementCurrency === "CUP"
+              ? Number.isFinite(draftRate) && draftRate > 0
+              : Number.isFinite(draftPercent) && draftPercent >= 0)
+          );
           const movements = movementsByAccount[account.id] ?? [];
+          const fifoPreview = fifoPreviewByAccount[account.id] ?? null;
+          const loadingFifoPreview = loadingFifoPreviewByAccount[account.id] === true;
           const loadingMovements =
             loadingMovementsByAccount[account.id] === true;
 
@@ -451,10 +513,60 @@ export function AccountsView({
                         Se creará una cuenta por cobrar de <strong className="text-foreground">{formatLocal(debtPreview)} {draft.settlementCurrency}</strong>.
                       </p>
                     ) : null}
+                    {draft.movementType === "wire" && loadingFifoPreview ? (
+                      <p className="rounded-lg border border-border/60 px-3 py-2 text-sm text-muted-foreground">
+                        Calculando costo FIFO...
+                      </p>
+                    ) : null}
+                    {draft.movementType === "wire" && fifoPreview ? (
+                      <div className={`space-y-2 rounded-xl border p-3 text-sm ${fifoPreview.canCreate ? "border-sky-500/30 bg-sky-500/10" : "border-red-500/30 bg-red-500/10"}`}>
+                        {fifoPreview.canCreate ? (
+                          <>
+                            <p className="font-medium text-foreground">
+                              {fifoPreview.selected.averagePrice == null
+                                ? `Estos ${formatLocal(fifoPreview.requestedUsd)} USD todavía no tienen precio asignado.`
+                                : `Estos ${formatLocal(fifoPreview.requestedUsd)} USD se tiraron a un promedio de ${formatLocal(fifoPreview.selected.averagePrice)} CUP/USD.`}
+                            </p>
+                            <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-4">
+                              <p>Valorados: <strong className="text-foreground">{formatLocal(fifoPreview.selected.pricedUsd)} USD</strong></p>
+                              <p>Sin precio: <strong className="text-foreground">{formatLocal(fifoPreview.selected.unpricedUsd)} USD</strong></p>
+                              <p>Costo: <strong className="text-foreground">{formatLocal(fifoPreview.selected.costCup)} CUP</strong></p>
+                              <p>Cobertura: <strong className="text-foreground">{formatLocal(fifoPreview.selected.coveragePercent)}%</strong></p>
+                            </div>
+                            {fifoPreview.selected.unpricedUsd > 0 ? (
+                              <p className="text-xs text-amber-300">
+                                El promedio corresponde solo a la parte valorada; hay {formatLocal(fifoPreview.selected.unpricedUsd)} USD sin precio.
+                              </p>
+                            ) : null}
+                            <p className="border-t border-border/60 pt-2 text-xs text-muted-foreground">
+                              Quedarán {formatLocal(fifoPreview.remaining.balanceUsd)} USD
+                              {fifoPreview.remaining.averagePrice == null
+                                ? " sin promedio disponible"
+                                : ` a un promedio de ${formatLocal(fifoPreview.remaining.averagePrice)} CUP/USD`}
+                              {fifoPreview.remaining.unpricedUsd > 0
+                                ? ` · ${formatLocal(fifoPreview.remaining.unpricedUsd)} USD sin precio`
+                                : ""}.
+                            </p>
+                          </>
+                        ) : (
+                          <p className="font-medium text-red-300">
+                            Saldo insuficiente: hay {formatLocal(fifoPreview.availableUsd)} USD disponibles.
+                          </p>
+                        )}
+                      </div>
+                    ) : null}
                     <Button
                       type="button"
                       onClick={() => handleCreateMovement(account.id)}
-                      disabled={loadingByAccount[account.id] === true}
+                      disabled={
+                        loadingByAccount[account.id] === true
+                        || (draft.movementType === "wire" && (
+                          loadingFifoPreview
+                          || !fifoPreview
+                          || !fifoPreview.canCreate
+                          || !wireFieldsValid
+                        ))
+                      }
                     >
                       {loadingByAccount[account.id] === true
                         ? "Guardando..."
@@ -505,6 +617,25 @@ export function AccountsView({
                               {movement.conversionRate != null ? ` · Tasa ${formatLocal(movement.conversionRate)}` : ""}
                               {movement.feePercent != null ? ` · ${formatLocal(movement.feePercent)}%` : ""}
                             </p>
+                          ) : null}
+                          {movement.movementType === "wire" ? (
+                            movement.fifoValuation ? (
+                              <div className="rounded-lg bg-secondary/40 px-2.5 py-2 text-xs text-muted-foreground">
+                                <p className="font-medium text-foreground">
+                                  {movement.fifoValuation.selected.averagePrice == null
+                                    ? "Wire sin precio FIFO disponible"
+                                    : `Precio FIFO: ${formatLocal(movement.fifoValuation.selected.averagePrice)} CUP/USD`}
+                                </p>
+                                <p className="mt-1">
+                                  {formatLocal(movement.fifoValuation.selected.pricedUsd)} USD valorados · {formatLocal(movement.fifoValuation.selected.unpricedUsd)} USD sin precio · Costo {formatLocal(movement.fifoValuation.selected.costCup)} CUP
+                                </p>
+                                <p className="mt-1">
+                                  Saldo después: {formatLocal(movement.fifoValuation.balanceAfterUsd)} USD
+                                </p>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground">Sin valoración FIFO histórica.</p>
+                            )
                           ) : null}
 
                           {movement.revertedAt ? (
