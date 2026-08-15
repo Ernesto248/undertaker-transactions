@@ -370,6 +370,7 @@ export function Dashboard({ initialTransactions, initialFeed }: DashboardProps) 
       conversionRate?: number;
       feePercent?: number;
       wireFeeUsd?: number;
+      ownerFeePercent?: number;
     },
   ) => {
     const res = await fetch(apiUrl("/api/accounts"), {
@@ -385,12 +386,28 @@ export function Dashboard({ initialTransactions, initialFeed }: DashboardProps) 
         conversionRate: input.conversionRate,
         feePercent: input.feePercent,
         wireFeeUsd: input.wireFeeUsd,
+        ownerFeePercent: input.ownerFeePercent,
       }),
     });
 
     if (!res.ok) return false;
 
     await Promise.all([refreshAccounts(), loadAccountMovements(accountId)]);
+    return true;
+  };
+
+  const updateAccountOwnerFee = async (
+    accountId: string,
+    ownerFeePercent: number,
+    note?: string,
+  ) => {
+    const res = await fetch(apiUrl(`/api/accounts/${accountId}`), {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ownerFeePercent, note }),
+    });
+    if (!res.ok) return false;
+    await refreshAccounts();
     return true;
   };
 
@@ -1010,6 +1027,7 @@ export function Dashboard({ initialTransactions, initialFeed }: DashboardProps) 
                 onRefreshAccounts={refreshAccounts}
                 onLoadMovements={loadAccountMovements}
                 onCreateMovement={createAccountMovement}
+                onUpdateAccountOwnerFee={updateAccountOwnerFee}
                 onRevertMovement={revertAccountMovement}
               />
             )}

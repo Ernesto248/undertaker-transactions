@@ -542,23 +542,26 @@ export function FinancesView() {
               <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
               <p className={cn(
                 "mt-2 text-xl font-semibold",
-                value.profitCup < 0 ? "text-red-400" : "text-emerald-400",
+                value.netProfitCup < 0 ? "text-red-400" : "text-emerald-400",
               )}>
-                {formatNumber(value.profitCup)} CUP
+                {formatNumber(value.netProfitCup)} CUP
               </p>
               <p className={cn(
                 "text-sm font-medium",
-                value.profitUsd < 0 ? "text-red-400" : "text-emerald-400",
+                value.netProfitUsd < 0 ? "text-red-400" : "text-emerald-400",
               )}>
-                {formatNumber(value.profitUsd)} USD
+                {formatNumber(value.netProfitUsd)} USD netos
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Bruta: {formatNumber(value.profitCup)} CUP · Comisión dueños: {formatNumber(value.ownerFeeCup)} CUP
               </p>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                <p>Exacta: {formatNumber(value.exactProfitCup)} CUP · {value.exactCount}</p>
-                <p>Estimada: {formatNumber(value.estimatedProfitCup)} CUP · {value.estimatedCount}</p>
+                <p>Exacta neta: {formatNumber(value.netExactProfitCup)} CUP · {value.netExactCount}</p>
+                <p>Estimada neta: {formatNumber(value.netEstimatedProfitCup)} CUP · {value.netEstimatedCount}</p>
               </div>
-              {value.pendingCount > 0 ? (
+              {value.netPendingCount > 0 ? (
                 <p className="mt-2 text-xs text-amber-300">
-                  {value.pendingCount} wire{value.pendingCount === 1 ? "" : "s"} sin ganancia calculable
+                  {value.netPendingCount} wire{value.netPendingCount === 1 ? "" : "s"} sin ganancia neta histórica calculable
                 </p>
               ) : null}
             </CardContent>

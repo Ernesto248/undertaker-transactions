@@ -258,6 +258,7 @@ export type AccountBalance = {
   balance: number;
   transactionCount: number;
   lastTransactionAt: string | null;
+  ownerFeePercent: number | null;
 };
 
 export type ZelleValuationSummary = {
@@ -298,6 +299,12 @@ export type WireProfitSnapshot = {
   fifoCostCup: number | null;
   profitCup: number | null;
   profitUsd: number | null;
+  ownerFeePercent: number | null;
+  ownerFeeAmount: number | null;
+  ownerFeeCup: number | null;
+  ownerFeeUsd: number | null;
+  netProfitCup: number | null;
+  netProfitUsd: number | null;
 };
 
 export type WireFifoPreview = {
@@ -309,7 +316,7 @@ export type WireFifoPreview = {
   totalDebitUsd?: number;
   availableUsd: number;
   canCreate: boolean;
-  error: "insufficient_account_balance" | "global_rate_required" | null;
+  error: "insufficient_account_balance" | "global_rate_required" | "owner_fee_required" | null;
   selected: ZelleValuationSummary;
   remaining: ZelleValuationSummary;
   profit?: WireProfitSnapshot | null;
@@ -473,6 +480,17 @@ export type WireProfitPeriodSummary = {
   exactCount: number;
   estimatedCount: number;
   pendingCount: number;
+  ownerFeeCup: number;
+  ownerFeeUsd: number;
+  netProfitCup: number;
+  netProfitUsd: number;
+  netExactProfitCup: number;
+  netExactProfitUsd: number;
+  netEstimatedProfitCup: number;
+  netEstimatedProfitUsd: number;
+  netExactCount: number;
+  netEstimatedCount: number;
+  netPendingCount: number;
 };
 
 export type FinanceOverview = {

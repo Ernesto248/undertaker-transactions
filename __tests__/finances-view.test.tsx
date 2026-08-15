@@ -50,8 +50,8 @@ const overview: FinanceOverview = {
       netCupUsd: -100,
     },
     wireProfits: {
-      lifetime: { profitCup: 0, profitUsd: 0, exactProfitCup: 0, exactProfitUsd: 0, estimatedProfitCup: 0, estimatedProfitUsd: 0, exactCount: 0, estimatedCount: 0, pendingCount: 0 },
-      currentMonth: { profitCup: 0, profitUsd: 0, exactProfitCup: 0, exactProfitUsd: 0, estimatedProfitCup: 0, estimatedProfitUsd: 0, exactCount: 0, estimatedCount: 0, pendingCount: 0 },
+      lifetime: { profitCup: 0, profitUsd: 0, exactProfitCup: 0, exactProfitUsd: 0, estimatedProfitCup: 0, estimatedProfitUsd: 0, exactCount: 0, estimatedCount: 0, pendingCount: 0, ownerFeeCup: 0, ownerFeeUsd: 0, netProfitCup: 0, netProfitUsd: 0, netExactProfitCup: 0, netExactProfitUsd: 0, netEstimatedProfitCup: 0, netEstimatedProfitUsd: 0, netExactCount: 0, netEstimatedCount: 0, netPendingCount: 0 },
+      currentMonth: { profitCup: 0, profitUsd: 0, exactProfitCup: 0, exactProfitUsd: 0, estimatedProfitCup: 0, estimatedProfitUsd: 0, exactCount: 0, estimatedCount: 0, pendingCount: 0, ownerFeeCup: 0, ownerFeeUsd: 0, netProfitCup: 0, netProfitUsd: 0, netExactProfitCup: 0, netExactProfitUsd: 0, netEstimatedProfitCup: 0, netEstimatedProfitUsd: 0, netExactCount: 0, netEstimatedCount: 0, netPendingCount: 0 },
     },
     capitalTotalUsd: 350,
   },

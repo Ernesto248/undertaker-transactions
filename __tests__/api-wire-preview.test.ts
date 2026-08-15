@@ -11,7 +11,7 @@ describe("GET /api/accounts/[id]/wire-preview", () => {
 
   it("returns the selected and remaining FIFO valuation", async () => {
     const client = {
-      query: vi.fn().mockResolvedValueOnce({
+      query: vi.fn().mockResolvedValueOnce({ rows: [{ ownerFeePercent: 2 }] }).mockResolvedValueOnce({
         rows: [
           {
             accountId: "2cfc4038-0f11-4f22-a7dd-cd7ec1597120",
@@ -62,6 +62,9 @@ describe("GET /api/accounts/[id]/wire-preview", () => {
         settlementAmount: 175000,
         fifoCostCup: 187000,
         profitCup: -12000,
+        ownerFeePercent: 2,
+        ownerFeeCup: 3500,
+        netProfitCup: -15500,
       },
     });
     expect(client.release).toHaveBeenCalledOnce();

@@ -40,6 +40,7 @@ const CreateAccountMovementSchema = MovementBaseSchema.extend({
     .transform(roundMoney)
     .optional()
     .default(0),
+  ownerFeePercent: z.number().finite().min(0).max(100).optional(),
 }).superRefine((value, context) => {
   if (value.movementType !== "wire") return;
   if (!value.counterpartyId) {
@@ -67,6 +68,7 @@ function mapAccountRow(row: any): AccountBalance {
     lastTransactionAt: row.lastTransactionAt
       ? new Date(row.lastTransactionAt).toISOString()
       : null,
+    ownerFeePercent: row.ownerFeePercent == null ? null : Number(row.ownerFeePercent),
   };
 }
 
@@ -121,6 +123,7 @@ export async function GET(request: Request) {
       SELECT
         g.id,
         g.account_name as "accountName",
+        g.owner_fee_percent as "ownerFeePercent",
         (COALESCE(tx.total_incoming, 0) + COALESCE(g.incoming_adjustment, 0)) as "incomingTotal",
         (COALESCE(m.total_outgoing, 0) + COALESCE(g.outgoing_adjustment, 0)) as "outgoingTotal",
         (
@@ -198,7 +201,8 @@ export async function POST(request: Request) {
       : parsed.data.amount;
 
     const accountResult = await client.query(
-      `SELECT id FROM gmail_accounts WHERE id = $1 FOR UPDATE`,
+      `SELECT id, owner_fee_percent as "ownerFeePercent"
+       FROM gmail_accounts WHERE id = $1 FOR UPDATE`,
       [parsed.data.accountId],
     );
     if (!accountResult.rows[0]?.id) {
@@ -210,6 +214,15 @@ export async function POST(request: Request) {
     }
 
     if (parsed.data.movementType === "wire") {
+      if (accountResult.rows[0].ownerFeePercent == null) {
+        await client.query("ROLLBACK");
+        return Response.json(
+          { ok: false, error: "owner_fee_required" },
+          { status: 409 },
+        );
+      }
+      const ownerFeePercent = parsed.data.ownerFeePercent
+        ?? Number(accountResult.rows[0].ownerFeePercent);
       const rateResult = await client.query(
         `SELECT usd_cup_rate as "globalRate"
          FROM finance_state WHERE id = 1 FOR SHARE`,
@@ -268,9 +281,11 @@ export async function POST(request: Request) {
         selected: valuationPreview.selected,
         remaining: valuationPreview.remaining,
         profit: calculateWireProfit({
+          principalUsd: parsed.data.amount,
           settlementCurrency: parsed.data.settlementCurrency!,
           settlementAmount: debtAmount,
           globalRate,
+          ownerFeePercent,
           selected: valuationPreview.selected,
         }),
       };
@@ -315,10 +330,13 @@ export async function POST(request: Request) {
           fifo_remaining_unpriced_usd, fifo_remaining_cost_cup,
           fifo_remaining_average_price, wire_fee_usd,
           wire_profit_status, wire_profit_global_rate,
-          wire_profit_fifo_cost_cup, wire_profit_cup, wire_profit_usd)
+          wire_profit_fifo_cost_cup, wire_profit_cup, wire_profit_usd,
+          wire_owner_fee_percent, wire_owner_fee_amount,
+          wire_owner_fee_cup, wire_owner_fee_usd,
+          wire_net_profit_cup, wire_net_profit_usd)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
                $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23,
-               $24, $25, $26, $27, $28, $29)`,
+               $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35)`,
       [
         movementId,
         parsed.data.accountId,
@@ -351,6 +369,12 @@ export async function POST(request: Request) {
         fifoValuation?.profit?.fifoCostCup ?? null,
         fifoValuation?.profit?.profitCup ?? null,
         fifoValuation?.profit?.profitUsd ?? null,
+        fifoValuation?.profit?.ownerFeePercent ?? null,
+        fifoValuation?.profit?.ownerFeeAmount ?? null,
+        fifoValuation?.profit?.ownerFeeCup ?? null,
+        fifoValuation?.profit?.ownerFeeUsd ?? null,
+        fifoValuation?.profit?.netProfitCup ?? null,
+        fifoValuation?.profit?.netProfitUsd ?? null,
       ],
     );
 

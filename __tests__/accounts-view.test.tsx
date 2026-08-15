@@ -11,6 +11,7 @@ const account: AccountBalance = {
   balance: 874.75,
   transactionCount: 1,
   lastTransactionAt: null,
+  ownerFeePercent: 2,
 };
 
 beforeAll(() => {
@@ -32,6 +33,7 @@ function renderAccountsView(onCreateMovement = vi.fn()) {
       onRefreshAccounts={vi.fn()}
       onLoadMovements={vi.fn().mockResolvedValue(undefined)}
       onCreateMovement={onCreateMovement}
+      onUpdateAccountOwnerFee={vi.fn().mockResolvedValue(true)}
       onRevertMovement={vi.fn()}
     />,
   );
@@ -119,6 +121,12 @@ describe("AccountsView", () => {
                 fifoCostCup: 68000,
                 profitCup: -5000,
                 profitUsd: -7.41,
+                ownerFeePercent: 2,
+                ownerFeeAmount: 1260,
+                ownerFeeCup: 1260,
+                ownerFeeUsd: 1.87,
+                netProfitCup: -6260,
+                netProfitUsd: -9.27,
               },
             },
           }),
@@ -139,7 +147,7 @@ describe("AccountsView", () => {
     fireEvent.change(screen.getAllByPlaceholderText("0.00")[1], { target: { value: "10" } });
 
     expect(await screen.findByText(/se tiraron a un promedio de 680 CUP\/USD/i)).toBeTruthy();
-    expect(screen.getByText(/Ganancia estimada/i)).toBeTruthy();
+    expect(screen.getByText(/Ganancia neta estimada/i)).toBeTruthy();
     expect(screen.getByText(/Quedarán 774.75 USD a un promedio de 680 CUP\/USD/i)).toBeTruthy();
     expect(screen.getByText(/hay 10 USD sin precio/i)).toBeTruthy();
   });

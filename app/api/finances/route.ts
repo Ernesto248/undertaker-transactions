@@ -40,6 +40,17 @@ function mapWireProfitPeriod(
     exactCount: toNumber(row[`${prefix}ExactCount`]),
     estimatedCount: toNumber(row[`${prefix}EstimatedCount`]),
     pendingCount: toNumber(row[`${prefix}PendingCount`]),
+    ownerFeeCup: toNumber(row[`${prefix}OwnerFeeCup`]),
+    ownerFeeUsd: toNumber(row[`${prefix}OwnerFeeUsd`]),
+    netProfitCup: toNumber(row[`${prefix}NetProfitCup`]),
+    netProfitUsd: toNumber(row[`${prefix}NetProfitUsd`]),
+    netExactProfitCup: toNumber(row[`${prefix}NetExactProfitCup`]),
+    netExactProfitUsd: toNumber(row[`${prefix}NetExactProfitUsd`]),
+    netEstimatedProfitCup: toNumber(row[`${prefix}NetEstimatedProfitCup`]),
+    netEstimatedProfitUsd: toNumber(row[`${prefix}NetEstimatedProfitUsd`]),
+    netExactCount: toNumber(row[`${prefix}NetExactCount`]),
+    netEstimatedCount: toNumber(row[`${prefix}NetEstimatedCount`]),
+    netPendingCount: toNumber(row[`${prefix}NetPendingCount`]),
   };
 }
 
@@ -106,6 +117,17 @@ export async function GET(request?: Request) {
                 COUNT(*) FILTER (WHERE wire_profit_status = 'EXACT')::int AS "lifetimeExactCount",
                 COUNT(*) FILTER (WHERE wire_profit_status = 'ESTIMATED')::int AS "lifetimeEstimatedCount",
                 COUNT(*) FILTER (WHERE wire_profit_status = 'UNAVAILABLE')::int AS "lifetimePendingCount",
+                COALESCE(SUM(wire_owner_fee_cup) FILTER (WHERE wire_owner_fee_percent IS NOT NULL), 0) AS "lifetimeOwnerFeeCup",
+                COALESCE(SUM(wire_owner_fee_usd) FILTER (WHERE wire_owner_fee_percent IS NOT NULL), 0) AS "lifetimeOwnerFeeUsd",
+                COALESCE(SUM(wire_net_profit_cup) FILTER (WHERE wire_net_profit_cup IS NOT NULL), 0) AS "lifetimeNetProfitCup",
+                COALESCE(SUM(wire_net_profit_usd) FILTER (WHERE wire_net_profit_usd IS NOT NULL), 0) AS "lifetimeNetProfitUsd",
+                COALESCE(SUM(wire_net_profit_cup) FILTER (WHERE wire_profit_status = 'EXACT'), 0) AS "lifetimeNetExactProfitCup",
+                COALESCE(SUM(wire_net_profit_usd) FILTER (WHERE wire_profit_status = 'EXACT'), 0) AS "lifetimeNetExactProfitUsd",
+                COALESCE(SUM(wire_net_profit_cup) FILTER (WHERE wire_profit_status = 'ESTIMATED'), 0) AS "lifetimeNetEstimatedProfitCup",
+                COALESCE(SUM(wire_net_profit_usd) FILTER (WHERE wire_profit_status = 'ESTIMATED'), 0) AS "lifetimeNetEstimatedProfitUsd",
+                COUNT(*) FILTER (WHERE wire_profit_status = 'EXACT' AND wire_owner_fee_percent IS NOT NULL)::int AS "lifetimeNetExactCount",
+                COUNT(*) FILTER (WHERE wire_profit_status = 'ESTIMATED' AND wire_owner_fee_percent IS NOT NULL)::int AS "lifetimeNetEstimatedCount",
+                COUNT(*) FILTER (WHERE wire_profit_status IS NOT NULL AND (wire_owner_fee_percent IS NULL OR wire_profit_status = 'UNAVAILABLE'))::int AS "lifetimeNetPendingCount",
                 COALESCE(SUM(wire_profit_cup) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status IN ('EXACT', 'ESTIMATED')), 0) AS "monthProfitCup",
                 COALESCE(SUM(wire_profit_usd) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status IN ('EXACT', 'ESTIMATED')), 0) AS "monthProfitUsd",
                 COALESCE(SUM(wire_profit_cup) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status = 'EXACT'), 0) AS "monthExactProfitCup",
@@ -115,6 +137,17 @@ export async function GET(request?: Request) {
                 COUNT(*) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status = 'EXACT')::int AS "monthExactCount",
                 COUNT(*) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status = 'ESTIMATED')::int AS "monthEstimatedCount",
                 COUNT(*) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status = 'UNAVAILABLE')::int AS "monthPendingCount"
+                ,COALESCE(SUM(wire_owner_fee_cup) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_owner_fee_percent IS NOT NULL), 0) AS "monthOwnerFeeCup"
+                ,COALESCE(SUM(wire_owner_fee_usd) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_owner_fee_percent IS NOT NULL), 0) AS "monthOwnerFeeUsd"
+                ,COALESCE(SUM(wire_net_profit_cup) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_net_profit_cup IS NOT NULL), 0) AS "monthNetProfitCup"
+                ,COALESCE(SUM(wire_net_profit_usd) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_net_profit_usd IS NOT NULL), 0) AS "monthNetProfitUsd"
+                ,COALESCE(SUM(wire_net_profit_cup) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status = 'EXACT'), 0) AS "monthNetExactProfitCup"
+                ,COALESCE(SUM(wire_net_profit_usd) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status = 'EXACT'), 0) AS "monthNetExactProfitUsd"
+                ,COALESCE(SUM(wire_net_profit_cup) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status = 'ESTIMATED'), 0) AS "monthNetEstimatedProfitCup"
+                ,COALESCE(SUM(wire_net_profit_usd) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status = 'ESTIMATED'), 0) AS "monthNetEstimatedProfitUsd"
+                ,COUNT(*) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status = 'EXACT' AND wire_owner_fee_percent IS NOT NULL)::int AS "monthNetExactCount"
+                ,COUNT(*) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status = 'ESTIMATED' AND wire_owner_fee_percent IS NOT NULL)::int AS "monthNetEstimatedCount"
+                ,COUNT(*) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status IS NOT NULL AND (wire_owner_fee_percent IS NULL OR wire_profit_status = 'UNAVAILABLE'))::int AS "monthNetPendingCount"
               FROM account_outflow_movements
               WHERE movement_type = 'wire'
                 AND reverted_at IS NULL
