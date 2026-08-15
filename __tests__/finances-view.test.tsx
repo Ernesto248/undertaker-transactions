@@ -49,6 +49,10 @@ const overview: FinanceOverview = {
       netCup: -42000,
       netCupUsd: -100,
     },
+    wireProfits: {
+      lifetime: { profitCup: 0, profitUsd: 0, exactProfitCup: 0, exactProfitUsd: 0, estimatedProfitCup: 0, estimatedProfitUsd: 0, exactCount: 0, estimatedCount: 0, pendingCount: 0 },
+      currentMonth: { profitCup: 0, profitUsd: 0, exactProfitCup: 0, exactProfitUsd: 0, estimatedProfitCup: 0, estimatedProfitUsd: 0, exactCount: 0, estimatedCount: 0, pendingCount: 0 },
+    },
     capitalTotalUsd: 350,
   },
   counterparties: [],

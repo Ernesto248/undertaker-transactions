@@ -85,6 +85,30 @@ export function emptyFinanceTotals(): FinanceOverviewTotals {
       netCup: 0,
       netCupUsd: null,
     },
+    wireProfits: {
+      lifetime: {
+        profitCup: 0,
+        profitUsd: 0,
+        exactProfitCup: 0,
+        exactProfitUsd: 0,
+        estimatedProfitCup: 0,
+        estimatedProfitUsd: 0,
+        exactCount: 0,
+        estimatedCount: 0,
+        pendingCount: 0,
+      },
+      currentMonth: {
+        profitCup: 0,
+        profitUsd: 0,
+        exactProfitCup: 0,
+        exactProfitUsd: 0,
+        estimatedProfitCup: 0,
+        estimatedProfitUsd: 0,
+        exactCount: 0,
+        estimatedCount: 0,
+        pendingCount: 0,
+      },
+    },
     capitalTotalUsd: null,
   };
 }

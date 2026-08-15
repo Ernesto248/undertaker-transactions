@@ -86,6 +86,9 @@ describe("AccountsView", () => {
               accountId: "account-1",
               accountName: "Cuenta principal",
               requestedUsd: 100,
+              principalUsd: 90,
+              wireFeeUsd: 10,
+              totalDebitUsd: 100,
               availableUsd: 874.75,
               canCreate: true,
               error: null,
@@ -109,6 +112,14 @@ describe("AccountsView", () => {
                 averagePrice: 680,
                 coveragePercent: 100,
               },
+              profit: {
+                status: "ESTIMATED",
+                globalRate: 675,
+                settlementAmount: 63000,
+                fifoCostCup: 68000,
+                profitCup: -5000,
+                profitUsd: -7.41,
+              },
             },
           }),
         };
@@ -123,9 +134,12 @@ describe("AccountsView", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Expandir" }));
     });
-    fireEvent.change(screen.getByPlaceholderText("0.00"), { target: { value: "100" } });
+    fireEvent.change(screen.getAllByPlaceholderText("0.00")[0], { target: { value: "90" } });
+    fireEvent.change(screen.getByPlaceholderText("700"), { target: { value: "700" } });
+    fireEvent.change(screen.getAllByPlaceholderText("0.00")[1], { target: { value: "10" } });
 
     expect(await screen.findByText(/se tiraron a un promedio de 680 CUP\/USD/i)).toBeTruthy();
+    expect(screen.getByText(/Ganancia estimada/i)).toBeTruthy();
     expect(screen.getByText(/Quedarán 774.75 USD a un promedio de 680 CUP\/USD/i)).toBeTruthy();
     expect(screen.getByText(/hay 10 USD sin precio/i)).toBeTruthy();
   });

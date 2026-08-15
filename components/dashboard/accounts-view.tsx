@@ -31,6 +31,7 @@ type AccountMovementInput = {
   settlementCurrency?: FinanceCurrency;
   conversionRate?: number;
   feePercent?: number;
+  wireFeeUsd?: number;
 };
 
 type AccountsViewProps = {
@@ -81,6 +82,7 @@ export function AccountsView({
         settlementCurrency: FinanceCurrency;
         conversionRate: string;
         feePercent: string;
+        wireFeeUsd: string;
       }
     >
   >({});
@@ -108,10 +110,18 @@ export function AccountsView({
     for (const account of accounts) {
       const draft = draftByAccount[account.id];
       const amount = parseFinanceNumberInput(draft?.amount ?? "");
+      const wireFeeUsd = parseFinanceNumberInput(draft?.wireFeeUsd ?? "0");
+      const conversionRate = parseFinanceNumberInput(draft?.conversionRate ?? "");
+      const feePercent = parseFinanceNumberInput(draft?.feePercent ?? "");
       const shouldLoad = expandedById[account.id] === true
         && (draft?.movementType ?? "wire") === "wire"
         && Number.isFinite(amount)
-        && amount > 0;
+        && amount > 0
+        && Number.isFinite(wireFeeUsd)
+        && wireFeeUsd >= 0
+        && (draft?.settlementCurrency === "USD"
+          ? Number.isFinite(feePercent) && feePercent >= 0
+          : Number.isFinite(conversionRate) && conversionRate > 0);
 
       if (!shouldLoad) {
         setFifoPreviewByAccount((previous) => ({ ...previous, [account.id]: null }));
@@ -124,7 +134,15 @@ export function AccountsView({
       const controller = new AbortController();
       controllers.push(controller);
       timers.push(setTimeout(() => {
-        void fetch(`/api/accounts/${account.id}/wire-preview?amount=${encodeURIComponent(amount)}`, {
+        const parameters = new URLSearchParams({
+          amount: String(amount),
+          wireFeeUsd: String(wireFeeUsd),
+          settlementCurrency: draft.settlementCurrency,
+          ...(draft.settlementCurrency === "CUP"
+            ? { conversionRate: String(conversionRate) }
+            : { feePercent: String(feePercent) }),
+        });
+        void fetch(`/api/accounts/${account.id}/wire-preview?${parameters.toString()}`, {
           cache: "no-store",
           signal: controller.signal,
         })
@@ -192,6 +210,7 @@ export function AccountsView({
         settlementCurrency: "CUP",
         conversionRate: "",
         feePercent: "",
+        wireFeeUsd: "0",
       }
     );
   };
@@ -213,6 +232,8 @@ export function AccountsView({
     if (draft.movementType === "wire" && !draft.counterpartyId) return;
     const conversionRate = parseFinanceNumberInput(draft.conversionRate);
     const feePercent = parseFinanceNumberInput(draft.feePercent);
+    const wireFeeUsd = parseFinanceNumberInput(draft.wireFeeUsd);
+    if (draft.movementType === "wire" && (!Number.isFinite(wireFeeUsd) || wireFeeUsd < 0)) return;
     if (draft.movementType === "wire" && draft.settlementCurrency === "CUP" && (!Number.isFinite(conversionRate) || conversionRate <= 0)) return;
     if (draft.movementType === "wire" && draft.settlementCurrency === "USD" && (!Number.isFinite(feePercent) || feePercent < 0)) return;
 
@@ -228,6 +249,7 @@ export function AccountsView({
           settlementCurrency: draft.settlementCurrency,
           conversionRate: draft.settlementCurrency === "CUP" ? conversionRate : undefined,
           feePercent: draft.settlementCurrency === "USD" ? feePercent : undefined,
+          wireFeeUsd,
         } : {}),
       });
       if (!created) return;
@@ -241,6 +263,7 @@ export function AccountsView({
           settlementCurrency: "CUP",
           conversionRate: "",
           feePercent: "",
+          wireFeeUsd: "0",
         },
       }));
     } finally {
@@ -337,6 +360,7 @@ export function AccountsView({
           const draftAmount = parseFinanceNumberInput(draft.amount);
           const draftRate = parseFinanceNumberInput(draft.conversionRate);
           const draftPercent = parseFinanceNumberInput(draft.feePercent);
+          const draftWireFee = parseFinanceNumberInput(draft.wireFeeUsd);
           const debtPreview = draft.movementType === "wire" && Number.isFinite(draftAmount) && draftAmount > 0
             ? draft.settlementCurrency === "CUP" && Number.isFinite(draftRate) && draftRate > 0
               ? draftAmount * draftRate
@@ -346,6 +370,7 @@ export function AccountsView({
             : null;
           const wireFieldsValid = draft.movementType !== "wire" || (
             draft.counterpartyId.length > 0
+            && Number.isFinite(draftWireFee) && draftWireFee >= 0
             && (draft.settlementCurrency === "CUP"
               ? Number.isFinite(draftRate) && draftRate > 0
               : Number.isFinite(draftPercent) && draftPercent >= 0)
@@ -486,8 +511,24 @@ export function AccountsView({
                             </Select>
                           </div>
                           <div className="space-y-1">
-                            <Label className="text-xs text-muted-foreground">{draft.settlementCurrency === "CUP" ? "Tasa CUP/USD" : "Porcentaje"}</Label>
+                            <Label className="text-xs text-muted-foreground">{draft.settlementCurrency === "CUP" ? "Tasa CUP/USD" : "Recargo al cliente (%)"}</Label>
                             <Input inputMode="decimal" value={draft.settlementCurrency === "CUP" ? draft.conversionRate : draft.feePercent} onChange={(event) => setDraftByAccount((prev) => ({ ...prev, [account.id]: { ...draft, [draft.settlementCurrency === "CUP" ? "conversionRate" : "feePercent"]: formatFinanceNumberInput(event.target.value) } }))} placeholder={draft.settlementCurrency === "CUP" ? "700" : "5"} className="bg-secondary border-border" />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs text-muted-foreground">Fee del wire (USD)</Label>
+                            <Input
+                              inputMode="decimal"
+                              value={draft.wireFeeUsd}
+                              onChange={(event) => setDraftByAccount((prev) => ({
+                                ...prev,
+                                [account.id]: {
+                                  ...draft,
+                                  wireFeeUsd: formatFinanceNumberInput(event.target.value),
+                                },
+                              }))}
+                              placeholder="0.00"
+                              className="bg-secondary border-border"
+                            />
                           </div>
                         </>
                       ) : null}
@@ -527,9 +568,14 @@ export function AccountsView({
                           <>
                             <p className="font-medium text-foreground">
                               {fifoPreview.selected.averagePrice == null
-                                ? `Estos ${formatLocal(fifoPreview.requestedUsd)} USD todavía no tienen precio asignado.`
-                                : `Estos ${formatLocal(fifoPreview.requestedUsd)} USD se tiraron a un promedio de ${formatLocal(fifoPreview.selected.averagePrice)} CUP/USD.`}
+                                ? `El débito total de ${formatLocal(fifoPreview.totalDebitUsd ?? fifoPreview.requestedUsd)} USD todavía no tiene precio asignado.`
+                                : `Estos ${formatLocal(fifoPreview.totalDebitUsd ?? fifoPreview.requestedUsd)} USD se tiraron a un promedio de ${formatLocal(fifoPreview.selected.averagePrice)} CUP/USD.`}
                             </p>
+                            <div className="grid grid-cols-3 gap-2 rounded-lg bg-background/50 p-2 text-xs text-muted-foreground">
+                              <p>Principal: <strong className="text-foreground">{formatLocal(fifoPreview.principalUsd ?? draftAmount)} USD</strong></p>
+                              <p>Fee: <strong className="text-foreground">{formatLocal(fifoPreview.wireFeeUsd ?? draftWireFee)} USD</strong></p>
+                              <p>Sale de Zelle: <strong className="text-foreground">{formatLocal(fifoPreview.totalDebitUsd ?? fifoPreview.requestedUsd)} USD</strong></p>
+                            </div>
                             <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-4">
                               <p>Valorados: <strong className="text-foreground">{formatLocal(fifoPreview.selected.pricedUsd)} USD</strong></p>
                               <p>Sin precio: <strong className="text-foreground">{formatLocal(fifoPreview.selected.unpricedUsd)} USD</strong></p>
@@ -540,6 +586,25 @@ export function AccountsView({
                               <p className="text-xs text-amber-300">
                                 El promedio corresponde solo a la parte valorada; hay {formatLocal(fifoPreview.selected.unpricedUsd)} USD sin precio.
                               </p>
+                            ) : null}
+                            {fifoPreview.profit ? (
+                              <div className="rounded-lg border border-border/60 bg-background/50 p-2">
+                                {fifoPreview.profit.status === "UNAVAILABLE" ? (
+                                  <p className="text-amber-400">Ganancia no disponible: todo el Zelle seleccionado está sin precio.</p>
+                                ) : (
+                                  <>
+                                    <p className="font-medium text-foreground">
+                                      Ganancia {fifoPreview.profit.status === "ESTIMATED" ? "estimada" : "exacta"}: {" "}
+                                      <span className={(fifoPreview.profit.profitCup ?? 0) < 0 ? "text-red-400" : "text-emerald-400"}>
+                                        {formatLocal(fifoPreview.profit.profitCup ?? 0)} CUP / {formatLocal(fifoPreview.profit.profitUsd ?? 0)} USD
+                                      </span>
+                                    </p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                      Cobro: {formatLocal(fifoPreview.profit.settlementAmount)} {draft.settlementCurrency} · Costo usado: {formatLocal(fifoPreview.profit.fifoCostCup ?? 0)} CUP · Tasa global: {formatLocal(fifoPreview.profit.globalRate)}
+                                    </p>
+                                  </>
+                                )}
+                              </div>
                             ) : null}
                             <p className="border-t border-border/60 pt-2 text-xs text-muted-foreground">
                               Quedarán {formatLocal(fifoPreview.remaining.balanceUsd)} USD
@@ -553,7 +618,9 @@ export function AccountsView({
                           </>
                         ) : (
                           <p className="font-medium text-red-300">
-                            Saldo insuficiente: hay {formatLocal(fifoPreview.availableUsd)} USD disponibles.
+                            {fifoPreview.error === "global_rate_required"
+                              ? "Configura una tasa global válida en Finanzas antes de registrar el wire."
+                              : `Saldo insuficiente: el débito total es ${formatLocal(fifoPreview.totalDebitUsd ?? fifoPreview.requestedUsd)} USD y hay ${formatLocal(fifoPreview.availableUsd)} USD disponibles.`}
                           </p>
                         )}
                       </div>
@@ -601,7 +668,7 @@ export function AccountsView({
                                 {movement.movementType}
                               </span>
                               <span className="text-sm font-semibold text-foreground">
-                                -{formatLocal(movement.amount)}
+                                -{formatLocal(movement.totalDebitUsd ?? movement.amount)}
                               </span>
                             </div>
                             <span className="text-xs text-muted-foreground">
@@ -622,6 +689,11 @@ export function AccountsView({
                             </p>
                           ) : null}
                           {movement.movementType === "wire" ? (
+                            <p className="text-xs text-muted-foreground">
+                              Principal {formatLocal(movement.amount)} USD · Fee {formatLocal(movement.wireFeeUsd ?? 0)} USD · Débito total {formatLocal(movement.totalDebitUsd ?? movement.amount)} USD
+                            </p>
+                          ) : null}
+                          {movement.movementType === "wire" ? (
                             movement.fifoValuation ? (
                               <div className="rounded-lg bg-secondary/40 px-2.5 py-2 text-xs text-muted-foreground">
                                 <p className="font-medium text-foreground">
@@ -635,6 +707,17 @@ export function AccountsView({
                                 <p className="mt-1">
                                   Saldo después: {formatLocal(movement.fifoValuation.balanceAfterUsd)} USD
                                 </p>
+                                {movement.fifoValuation.profit ? (
+                                  movement.fifoValuation.profit.status === "UNAVAILABLE" ? (
+                                    <p className="mt-1 text-amber-400">Ganancia no disponible por falta total de precio.</p>
+                                  ) : (
+                                    <p className={`mt-1 font-medium ${(movement.fifoValuation.profit.profitCup ?? 0) < 0 ? "text-red-400" : "text-emerald-400"}`}>
+                                      Ganancia {movement.fifoValuation.profit.status === "ESTIMATED" ? "estimada" : "exacta"}: {formatLocal(movement.fifoValuation.profit.profitCup ?? 0)} CUP / {formatLocal(movement.fifoValuation.profit.profitUsd ?? 0)} USD
+                                    </p>
+                                  )
+                                ) : (
+                                  <p className="mt-1">Sin cálculo histórico de ganancia.</p>
+                                )}
                               </div>
                             ) : (
                               <p className="text-xs text-muted-foreground">Sin valoración FIFO histórica.</p>

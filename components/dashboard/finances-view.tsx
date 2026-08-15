@@ -532,6 +532,40 @@ export function FinancesView() {
         ))}
       </div>
 
+      <div className="grid gap-3 md:grid-cols-2">
+        {[
+          { label: "Ganancia de wires · Mes actual", value: totals.wireProfits.currentMonth },
+          { label: "Ganancia de wires · Histórica", value: totals.wireProfits.lifetime },
+        ].map(({ label, value }) => (
+          <Card key={label} className="border-emerald-500/25 bg-gradient-to-br from-emerald-500/10 via-card to-card">
+            <CardContent className="p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+              <p className={cn(
+                "mt-2 text-xl font-semibold",
+                value.profitCup < 0 ? "text-red-400" : "text-emerald-400",
+              )}>
+                {formatNumber(value.profitCup)} CUP
+              </p>
+              <p className={cn(
+                "text-sm font-medium",
+                value.profitUsd < 0 ? "text-red-400" : "text-emerald-400",
+              )}>
+                {formatNumber(value.profitUsd)} USD
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                <p>Exacta: {formatNumber(value.exactProfitCup)} CUP · {value.exactCount}</p>
+                <p>Estimada: {formatNumber(value.estimatedProfitCup)} CUP · {value.estimatedCount}</p>
+              </div>
+              {value.pendingCount > 0 ? (
+                <p className="mt-2 text-xs text-amber-300">
+                  {value.pendingCount} wire{value.pendingCount === 1 ? "" : "s"} sin ganancia calculable
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
       <Card className="overflow-hidden border-sky-500/25 bg-gradient-to-br from-sky-500/10 via-card to-card">
         <CardHeader>
           <CardTitle>Valoración del Zelle</CardTitle>

@@ -11,7 +11,7 @@ describe("GET /api/accounts/[id]/wire-preview", () => {
 
   it("returns the selected and remaining FIFO valuation", async () => {
     const client = {
-      query: vi.fn().mockResolvedValue({
+      query: vi.fn().mockResolvedValueOnce({
         rows: [
           {
             accountId: "2cfc4038-0f11-4f22-a7dd-cd7ec1597120",
@@ -36,14 +36,14 @@ describe("GET /api/accounts/[id]/wire-preview", () => {
             priceApplied: 680,
           },
         ],
-      }),
+      }).mockResolvedValueOnce({ rows: [{ globalRate: 675 }] }),
       release: vi.fn(),
     };
     connectMock.mockResolvedValue(client);
 
     const { GET } = await import("@/app/api/accounts/[id]/wire-preview/route");
     const response = await GET(
-      new Request("http://localhost/api/accounts/2cfc4038-0f11-4f22-a7dd-cd7ec1597120/wire-preview?amount=250"),
+      new Request("http://localhost/api/accounts/2cfc4038-0f11-4f22-a7dd-cd7ec1597120/wire-preview?amount=250&wireFeeUsd=25&settlementCurrency=CUP&conversionRate=700"),
       { params: Promise.resolve({ id: "2cfc4038-0f11-4f22-a7dd-cd7ec1597120" }) },
     );
     const json = await response.json();
@@ -51,9 +51,18 @@ describe("GET /api/accounts/[id]/wire-preview", () => {
     expect(response.status).toBe(200);
     expect(json.preview).toMatchObject({
       canCreate: true,
-      requestedUsd: 250,
-      selected: { averagePrice: 680, costCup: 170000 },
-      remaining: { balanceUsd: 750, averagePrice: 680 },
+      requestedUsd: 275,
+      principalUsd: 250,
+      wireFeeUsd: 25,
+      totalDebitUsd: 275,
+      selected: { averagePrice: 680, costCup: 187000 },
+      remaining: { balanceUsd: 725, averagePrice: 680 },
+      profit: {
+        status: "EXACT",
+        settlementAmount: 175000,
+        fifoCostCup: 187000,
+        profitCup: -12000,
+      },
     });
     expect(client.release).toHaveBeenCalledOnce();
   });

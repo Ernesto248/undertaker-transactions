@@ -26,6 +26,10 @@ function mapMovementRow(row: any): AccountMovement {
     settlementCurrency: row.settlementCurrency === "CUP" ? "CUP" : row.settlementCurrency === "USD" ? "USD" : null,
     conversionRate: row.conversionRate == null ? null : Number(row.conversionRate),
     feePercent: row.feePercent == null ? null : Number(row.feePercent),
+    wireFeeUsd: row.wireFeeUsd == null ? null : Number(row.wireFeeUsd),
+    totalDebitUsd: row.movementType === "wire"
+      ? Number(row.amount ?? 0) + Number(row.wireFeeUsd ?? 0)
+      : Number(row.amount ?? 0),
     debtAmount: row.debtAmount == null ? null : Number(row.debtAmount),
     financeDebtMovementId: row.financeDebtMovementId == null ? null : String(row.financeDebtMovementId),
     fifoValuation: row.fifoMethod === "FIFO_PER_ACCOUNT" && row.fifoValuedAt
@@ -34,6 +38,9 @@ function mapMovementRow(row: any): AccountMovement {
           valuedAt: new Date(row.fifoValuedAt).toISOString(),
           balanceBeforeUsd: Number(row.fifoBalanceBeforeUsd ?? 0),
           balanceAfterUsd: Number(row.fifoBalanceAfterUsd ?? 0),
+          principalUsd: Number(row.amount ?? 0),
+          wireFeeUsd: Number(row.wireFeeUsd ?? 0),
+          totalDebitUsd: Number(row.amount ?? 0) + Number(row.wireFeeUsd ?? 0),
           selected: {
             balanceUsd: fifoSelectedUsd,
             inventoryUsd: fifoSelectedUsd,
@@ -54,6 +61,18 @@ function mapMovementRow(row: any): AccountMovement {
             averagePrice: row.fifoRemainingAveragePrice == null ? null : Number(row.fifoRemainingAveragePrice),
             coveragePercent: fifoRemainingUsd > 0 ? (fifoRemainingPricedUsd / fifoRemainingUsd) * 100 : 0,
           },
+          profit: row.wireProfitStatus
+            ? {
+                status: row.wireProfitStatus,
+                globalRate: Number(row.wireProfitGlobalRate),
+                settlementAmount: Number(row.debtAmount ?? 0),
+                fifoCostCup: row.wireProfitFifoCostCup == null
+                  ? null
+                  : Number(row.wireProfitFifoCostCup),
+                profitCup: row.wireProfitCup == null ? null : Number(row.wireProfitCup),
+                profitUsd: row.wireProfitUsd == null ? null : Number(row.wireProfitUsd),
+              }
+            : null,
         }
       : null,
   };
@@ -153,6 +172,12 @@ export async function GET(request: Request, { params }: Params) {
         m.settlement_currency as "settlementCurrency",
         m.conversion_rate as "conversionRate",
         m.fee_percent as "feePercent",
+        m.wire_fee_usd as "wireFeeUsd",
+        m.wire_profit_status as "wireProfitStatus",
+        m.wire_profit_global_rate as "wireProfitGlobalRate",
+        m.wire_profit_fifo_cost_cup as "wireProfitFifoCostCup",
+        m.wire_profit_cup as "wireProfitCup",
+        m.wire_profit_usd as "wireProfitUsd",
         m.debt_amount as "debtAmount",
         m.finance_debt_movement_id as "financeDebtMovementId",
         m.fifo_method as "fifoMethod",

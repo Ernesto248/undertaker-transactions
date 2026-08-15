@@ -51,6 +51,26 @@ describe("finance APIs", () => {
         expenses: [{ id: "e-1", currency: "CUP", amount: 500, description: "Mensajeria", balanceBefore: 42000, balanceAfter: 41500, occurredAt: "2026-08-07T10:00:00.000Z" }],
         cash_movements: [],
         exchanges: [],
+        wire_profits: {
+          lifetimeProfitCup: 183000,
+          lifetimeProfitUsd: 271.11,
+          lifetimeExactProfitCup: 183000,
+          lifetimeExactProfitUsd: 271.11,
+          lifetimeEstimatedProfitCup: 0,
+          lifetimeEstimatedProfitUsd: 0,
+          lifetimeExactCount: 1,
+          lifetimeEstimatedCount: 0,
+          lifetimePendingCount: 2,
+          monthProfitCup: -25000,
+          monthProfitUsd: -37.04,
+          monthExactProfitCup: 0,
+          monthExactProfitUsd: 0,
+          monthEstimatedProfitCup: -25000,
+          monthEstimatedProfitUsd: -37.04,
+          monthExactCount: 0,
+          monthEstimatedCount: 1,
+          monthPendingCount: 1,
+        },
       }],
       [
         { id: "c-1", name: "Miguel", balanceUsd: 25, balanceCup: 10000, archivedAt: null, createdAt: "2026-08-07T10:00:00.000Z", updatedAt: "2026-08-07T10:00:00.000Z" },
@@ -75,6 +95,10 @@ describe("finance APIs", () => {
     expect(json.overview.totals.remeseros.payableCup).toBe(100000);
     expect(json.overview.totals.remeseros.netCup).toBe(-84000);
     expect(json.overview.totals.capitalTotalUsd).toBe(350);
+    expect(json.overview.totals.wireProfits).toMatchObject({
+      lifetime: { profitCup: 183000, exactCount: 1, pendingCount: 2 },
+      currentMonth: { profitCup: -25000, estimatedCount: 1, pendingCount: 1 },
+    });
     expect(json.overview.expenses[0]).toMatchObject({
       currency: "CUP",
       amount: 500,

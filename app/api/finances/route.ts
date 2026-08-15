@@ -16,6 +16,7 @@ import type {
   FinanceMovementType,
   FinanceOverview,
   FinanceSettingChange,
+  WireProfitPeriodSummary,
 } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -23,6 +24,23 @@ export const runtime = "nodejs";
 function toNumber(value: unknown) {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function mapWireProfitPeriod(
+  row: Record<string, unknown>,
+  prefix: "lifetime" | "month",
+): WireProfitPeriodSummary {
+  return {
+    profitCup: toNumber(row[`${prefix}ProfitCup`]),
+    profitUsd: toNumber(row[`${prefix}ProfitUsd`]),
+    exactProfitCup: toNumber(row[`${prefix}ExactProfitCup`]),
+    exactProfitUsd: toNumber(row[`${prefix}ExactProfitUsd`]),
+    estimatedProfitCup: toNumber(row[`${prefix}EstimatedProfitCup`]),
+    estimatedProfitUsd: toNumber(row[`${prefix}EstimatedProfitUsd`]),
+    exactCount: toNumber(row[`${prefix}ExactCount`]),
+    estimatedCount: toNumber(row[`${prefix}EstimatedCount`]),
+    pendingCount: toNumber(row[`${prefix}PendingCount`]),
+  };
 }
 
 export async function GET(request?: Request) {
@@ -76,7 +94,32 @@ export async function GET(request?: Request) {
                        reversal_of_id as "reversalOfId", note, occurred_at as "occurredAt"
                 FROM finance_cash_movements ORDER BY occurred_at DESC, created_at DESC LIMIT 20
               ) cash_row)
-            END AS cash_movements
+            END AS cash_movements,
+            (SELECT row_to_json(profit_row) FROM (
+              SELECT
+                COALESCE(SUM(wire_profit_cup) FILTER (WHERE wire_profit_status IN ('EXACT', 'ESTIMATED')), 0) AS "lifetimeProfitCup",
+                COALESCE(SUM(wire_profit_usd) FILTER (WHERE wire_profit_status IN ('EXACT', 'ESTIMATED')), 0) AS "lifetimeProfitUsd",
+                COALESCE(SUM(wire_profit_cup) FILTER (WHERE wire_profit_status = 'EXACT'), 0) AS "lifetimeExactProfitCup",
+                COALESCE(SUM(wire_profit_usd) FILTER (WHERE wire_profit_status = 'EXACT'), 0) AS "lifetimeExactProfitUsd",
+                COALESCE(SUM(wire_profit_cup) FILTER (WHERE wire_profit_status = 'ESTIMATED'), 0) AS "lifetimeEstimatedProfitCup",
+                COALESCE(SUM(wire_profit_usd) FILTER (WHERE wire_profit_status = 'ESTIMATED'), 0) AS "lifetimeEstimatedProfitUsd",
+                COUNT(*) FILTER (WHERE wire_profit_status = 'EXACT')::int AS "lifetimeExactCount",
+                COUNT(*) FILTER (WHERE wire_profit_status = 'ESTIMATED')::int AS "lifetimeEstimatedCount",
+                COUNT(*) FILTER (WHERE wire_profit_status = 'UNAVAILABLE')::int AS "lifetimePendingCount",
+                COALESCE(SUM(wire_profit_cup) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status IN ('EXACT', 'ESTIMATED')), 0) AS "monthProfitCup",
+                COALESCE(SUM(wire_profit_usd) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status IN ('EXACT', 'ESTIMATED')), 0) AS "monthProfitUsd",
+                COALESCE(SUM(wire_profit_cup) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status = 'EXACT'), 0) AS "monthExactProfitCup",
+                COALESCE(SUM(wire_profit_usd) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status = 'EXACT'), 0) AS "monthExactProfitUsd",
+                COALESCE(SUM(wire_profit_cup) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status = 'ESTIMATED'), 0) AS "monthEstimatedProfitCup",
+                COALESCE(SUM(wire_profit_usd) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status = 'ESTIMATED'), 0) AS "monthEstimatedProfitUsd",
+                COUNT(*) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status = 'EXACT')::int AS "monthExactCount",
+                COUNT(*) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status = 'ESTIMATED')::int AS "monthEstimatedCount",
+                COUNT(*) FILTER (WHERE created_at >= date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'America/New_York') AT TIME ZONE 'America/New_York' AND wire_profit_status = 'UNAVAILABLE')::int AS "monthPendingCount"
+              FROM account_outflow_movements
+              WHERE movement_type = 'wire'
+                AND reverted_at IS NULL
+                AND wire_profit_status IS NOT NULL
+            ) profit_row) AS wire_profits
         `, [summaryView]),
         loadZelleInventories(client),
         client.query(`
@@ -128,6 +171,7 @@ export async function GET(request?: Request) {
     const expensesRows = Array.isArray(core.expenses) ? core.expenses : [];
     const exchangesRows = Array.isArray(core.exchanges) ? core.exchanges : [];
     const cashMovementRows = Array.isArray(core.cash_movements) ? core.cash_movements : [];
+    const wireProfitRows = core.wire_profits ?? {};
     const settings = {
       cashUsd: toNumber(state.cashUsd),
       cashCup: toNumber(state.cashCup),
@@ -265,6 +309,10 @@ export async function GET(request?: Request) {
           netUsd: externalNetUsd,
           netCup: externalNetCup,
           netCupUsd: rate ? externalNetCup / rate : null,
+        },
+        wireProfits: {
+          lifetime: mapWireProfitPeriod(wireProfitRows, "lifetime"),
+          currentMonth: mapWireProfitPeriod(wireProfitRows, "month"),
         },
         capitalTotalUsd: calculateCapitalTotal({
           cashUsd: settings.cashUsd,

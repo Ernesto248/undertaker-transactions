@@ -281,19 +281,38 @@ export type WireFifoSnapshot = {
   valuedAt: string;
   balanceBeforeUsd: number;
   balanceAfterUsd: number;
+  principalUsd?: number;
+  wireFeeUsd?: number;
+  totalDebitUsd?: number;
   selected: ZelleValuationSummary;
   remaining: ZelleValuationSummary;
+  profit?: WireProfitSnapshot | null;
+};
+
+export type WireProfitStatus = "EXACT" | "ESTIMATED" | "UNAVAILABLE";
+
+export type WireProfitSnapshot = {
+  status: WireProfitStatus;
+  globalRate: number;
+  settlementAmount: number;
+  fifoCostCup: number | null;
+  profitCup: number | null;
+  profitUsd: number | null;
 };
 
 export type WireFifoPreview = {
   accountId: string;
   accountName: string;
   requestedUsd: number;
+  principalUsd?: number;
+  wireFeeUsd?: number;
+  totalDebitUsd?: number;
   availableUsd: number;
   canCreate: boolean;
-  error: "insufficient_account_balance" | null;
+  error: "insufficient_account_balance" | "global_rate_required" | null;
   selected: ZelleValuationSummary;
   remaining: ZelleValuationSummary;
+  profit?: WireProfitSnapshot | null;
 };
 
 export type AccountMovement = {
@@ -310,6 +329,8 @@ export type AccountMovement = {
   settlementCurrency?: FinanceCurrency | null;
   conversionRate?: number | null;
   feePercent?: number | null;
+  wireFeeUsd?: number | null;
+  totalDebitUsd?: number | null;
   debtAmount?: number | null;
   financeDebtMovementId?: string | null;
   fifoValuation?: WireFifoSnapshot | null;
@@ -435,7 +456,23 @@ export type FinanceOverviewTotals = {
     netCup: number;
     netCupUsd: number | null;
   };
+  wireProfits: {
+    lifetime: WireProfitPeriodSummary;
+    currentMonth: WireProfitPeriodSummary;
+  };
   capitalTotalUsd: number | null;
+};
+
+export type WireProfitPeriodSummary = {
+  profitCup: number;
+  profitUsd: number;
+  exactProfitCup: number;
+  exactProfitUsd: number;
+  estimatedProfitCup: number;
+  estimatedProfitUsd: number;
+  exactCount: number;
+  estimatedCount: number;
+  pendingCount: number;
 };
 
 export type FinanceOverview = {
