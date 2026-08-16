@@ -34,6 +34,10 @@ const overview: FinanceOverview = {
         coveragePercent: 80,
       }],
     },
+    pendingAssignments: {
+      count: 2,
+      amountUsd: 50,
+    },
     remeseros: {
       receivableCup: 16000,
       payableCup: 100000,
@@ -53,7 +57,7 @@ const overview: FinanceOverview = {
       lifetime: { profitCup: 0, profitUsd: 0, exactProfitCup: 0, exactProfitUsd: 0, estimatedProfitCup: 0, estimatedProfitUsd: 0, exactCount: 0, estimatedCount: 0, pendingCount: 0, ownerFeeCup: 0, ownerFeeUsd: 0, netProfitCup: 0, netProfitUsd: 0, netExactProfitCup: 0, netExactProfitUsd: 0, netEstimatedProfitCup: 0, netEstimatedProfitUsd: 0, netExactCount: 0, netEstimatedCount: 0, netPendingCount: 0 },
       currentMonth: { profitCup: 0, profitUsd: 0, exactProfitCup: 0, exactProfitUsd: 0, estimatedProfitCup: 0, estimatedProfitUsd: 0, exactCount: 0, estimatedCount: 0, pendingCount: 0, ownerFeeCup: 0, ownerFeeUsd: 0, netProfitCup: 0, netProfitUsd: 0, netExactProfitCup: 0, netExactProfitUsd: 0, netEstimatedProfitCup: 0, netEstimatedProfitUsd: 0, netExactCount: 0, netEstimatedCount: 0, netPendingCount: 0 },
     },
-    capitalTotalUsd: 350,
+    capitalTotalUsd: 300,
   },
   counterparties: [],
   settingChanges: [],
@@ -74,8 +78,11 @@ describe("FinancesView", () => {
 
     render(<FinancesView />);
 
-    expect(await screen.findByText("$ 350 USD")).toBeTruthy();
+    expect(await screen.findByText("$ 300 USD")).toBeTruthy();
     expect(screen.getByText("Zelle USD")).toBeTruthy();
+    expect(screen.getByText("Pendiente de asignar")).toBeTruthy();
+    expect(screen.getByText("- $ 50 USD")).toBeTruthy();
+    expect(screen.getByText("2 transacciones reservadas")).toBeTruthy();
     expect(screen.getByText("Deuda con remeseros")).toBeTruthy();
     expect(screen.getByText("Externas por pagar")).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledWith("/api/finances?view=summary", { cache: "no-store" });
@@ -90,7 +97,7 @@ describe("FinancesView", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<FinancesView />);
 
-    await screen.findByText("$ 350 USD");
+    await screen.findByText("$ 300 USD");
     expect(screen.queryByLabelText("Efectivo USD")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Editar balances" }));
 
@@ -229,7 +236,7 @@ describe("FinancesView", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<FinancesView />);
 
-    await screen.findByText("$ 350 USD");
+    await screen.findByText("$ 300 USD");
     fireEvent.click(screen.getByRole("button", { name: "Registrar gasto" }));
     fireEvent.change(await screen.findByLabelText("Moneda"), { target: { value: "CUP" } });
     const amountInput = screen.getByLabelText("Monto") as HTMLInputElement;

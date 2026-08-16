@@ -76,6 +76,20 @@ export async function GET(request?: Request) {
                      COALESCE(-SUM(deuda_actual), 0) as "netCup"
               FROM remeseros WHERE deleted_at IS NULL
             ) remesero_row) AS remeseros,
+            (SELECT row_to_json(pending_row) FROM (
+              SELECT COUNT(*)::int as "count",
+                     COALESCE(SUM(t.amount), 0) as "amountUsd"
+              FROM transactions t
+              WHERE t.deleted_at IS NULL
+                AND t.amount > 0
+                AND t.currency = 'USD'
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM remesero_transaction_assignments assignment
+                  WHERE assignment.transaction_id = t.id
+                    AND assignment.unassigned_at IS NULL
+                )
+            ) pending_row) AS pending_assignments,
             (SELECT COALESCE(json_agg(row_to_json(change_row)), '[]') FROM (
               SELECT id, field_name as "fieldName", previous_value as "previousValue",
                      new_value as "newValue", note, changed_at as "changedAt"
@@ -200,6 +214,7 @@ export async function GET(request?: Request) {
     const core = coreResult.rows[0] ?? {};
     const state = core.state ?? {};
     const remeseroRow = core.remeseros ?? {};
+    const pendingAssignmentsRow = core.pending_assignments ?? {};
     const changesRows = Array.isArray(core.changes) ? core.changes : [];
     const expensesRows = Array.isArray(core.expenses) ? core.expenses : [];
     const exchangesRows = Array.isArray(core.exchanges) ? core.exchanges : [];
@@ -268,6 +283,10 @@ export async function GET(request?: Request) {
     const rate = settings.usdCupRate;
     const zelleValuation = summarizeZelleInventories(zelleInventories);
     const zelleUsd = zelleValuation.summary.balanceUsd;
+    const pendingAssignments = {
+      count: toNumber(pendingAssignmentsRow.count),
+      amountUsd: toNumber(pendingAssignmentsRow.amountUsd),
+    };
 
     const settingChanges: FinanceSettingChange[] = changesRows.map((row: any) => ({
       id: String(row.id),
@@ -331,6 +350,7 @@ export async function GET(request?: Request) {
           ...zelleValuation.summary,
           accounts: zelleValuation.accounts,
         },
+        pendingAssignments,
         remeseros: {
           receivableCup: toNumber(remeseroRow.receivableCup),
           payableCup: toNumber(remeseroRow.payableCup),
@@ -352,6 +372,7 @@ export async function GET(request?: Request) {
           cashCup: settings.cashCup,
           usdCupRate: rate,
           zelleUsd,
+          pendingAssignmentsUsd: pendingAssignments.amountUsd,
           remeserosNetCup,
           externalNetUsd,
           externalNetCup,
