@@ -77,8 +77,7 @@ export async function GET(request?: Request) {
               FROM remeseros WHERE deleted_at IS NULL
             ) remesero_row) AS remeseros,
             (SELECT row_to_json(pending_row) FROM (
-              SELECT COUNT(*)::int as "count",
-                     COALESCE(SUM(t.amount), 0) as "amountUsd"
+              SELECT COUNT(*)::int as "count"
               FROM transactions t
               WHERE t.deleted_at IS NULL
                 AND t.amount > 0
@@ -285,7 +284,7 @@ export async function GET(request?: Request) {
     const zelleUsd = zelleValuation.summary.balanceUsd;
     const pendingAssignments = {
       count: toNumber(pendingAssignmentsRow.count),
-      amountUsd: toNumber(pendingAssignmentsRow.amountUsd),
+      amountUsd: zelleValuation.summary.unpricedUsd,
     };
 
     const settingChanges: FinanceSettingChange[] = changesRows.map((row: any) => ({
@@ -372,7 +371,7 @@ export async function GET(request?: Request) {
           cashCup: settings.cashCup,
           usdCupRate: rate,
           zelleUsd,
-          pendingAssignmentsUsd: pendingAssignments.amountUsd,
+          unpricedZelleUsd: zelleValuation.summary.unpricedUsd,
           remeserosNetCup,
           externalNetUsd,
           externalNetCup,

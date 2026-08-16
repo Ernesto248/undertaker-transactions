@@ -47,7 +47,7 @@ describe("finance APIs", () => {
       [{
         state: { cashUsd: 100, cashCup: 42000, usdCupRate: 420, updatedAt: "2026-08-07T10:00:00.000Z" },
         remeseros: { receivableCup: 16000, payableCup: 100000, netCup: -84000 },
-        pending_assignments: { count: 2, amountUsd: 50 },
+        pending_assignments: { count: 2 },
         changes: [],
         expenses: [{ id: "e-1", currency: "CUP", amount: 500, description: "Mensajeria", balanceBefore: 42000, balanceAfter: 41500, occurredAt: "2026-08-07T10:00:00.000Z" }],
         cash_movements: [],
@@ -95,8 +95,8 @@ describe("finance APIs", () => {
     expect(json.overview.totals.remeseros.receivableCup).toBe(16000);
     expect(json.overview.totals.remeseros.payableCup).toBe(100000);
     expect(json.overview.totals.remeseros.netCup).toBe(-84000);
-    expect(json.overview.totals.pendingAssignments).toEqual({ count: 2, amountUsd: 50 });
-    expect(json.overview.totals.capitalTotalUsd).toBe(300);
+    expect(json.overview.totals.pendingAssignments).toEqual({ count: 2, amountUsd: 100 });
+    expect(json.overview.totals.capitalTotalUsd).toBe(250);
     expect(json.overview.totals.wireProfits).toMatchObject({
       lifetime: { profitCup: 183000, exactCount: 1, pendingCount: 2 },
       currentMonth: { profitCup: -25000, estimatedCount: 1, pendingCount: 1 },
@@ -122,7 +122,7 @@ describe("finance APIs", () => {
       [{
         state: { cashUsd: 100, cashCup: 0, usdCupRate: null, updatedAt: "2026-08-07T10:00:00.000Z" },
         remeseros: { receivableCup: 0, payableCup: 0, netCup: 0 },
-        pending_assignments: { count: 1, amountUsd: 75 },
+        pending_assignments: { count: 1 },
         changes: [], expenses: [], cash_movements: [], exchanges: [],
       }],
       [],
@@ -135,7 +135,7 @@ describe("finance APIs", () => {
     const { GET } = await import("@/app/api/finances/route");
     const json = await (await GET()).json();
     expect(json.overview.totals.capitalTotalUsd).toBeNull();
-    expect(json.overview.totals.pendingAssignments).toEqual({ count: 1, amountUsd: 75 });
+    expect(json.overview.totals.pendingAssignments).toEqual({ count: 1, amountUsd: 100 });
     expect(json.overview.totals.remeseros.netUsd).toBeNull();
   });
 
