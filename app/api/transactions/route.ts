@@ -136,6 +136,7 @@ export async function GET(request: Request) {
         account: OptionalStringSchema,
         search: OptionalStringSchema,
         sender: OptionalStringSchema,
+        code: OptionalStringSchema,
         amount: z.preprocess(
           (value) => value === null || value === "" ? undefined : value,
           z.coerce.number().finite().optional(),
@@ -156,6 +157,7 @@ export async function GET(request: Request) {
         account: searchParams.get("account"),
         search: searchParams.get("search"),
         sender: searchParams.get("sender"),
+        code: searchParams.get("code"),
         amount: searchParams.get("amount"),
         remesero: searchParams.get("remesero"),
         from: searchParams.get("from"),

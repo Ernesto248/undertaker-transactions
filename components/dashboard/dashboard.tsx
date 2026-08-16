@@ -161,6 +161,7 @@ export function Dashboard({ initialTransactions, initialFeed }: DashboardProps) 
   const [accountFilter, setAccountFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [senderFilter, setSenderFilter] = useState("");
+  const [codeFilter, setCodeFilter] = useState("");
   const [amountFilter, setAmountFilter] = useState("");
   const [remeseroFilter, setRemeseroFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("week");
@@ -170,6 +171,7 @@ export function Dashboard({ initialTransactions, initialFeed }: DashboardProps) 
   }>({ from: undefined, to: undefined });
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [debouncedSenderFilter, setDebouncedSenderFilter] = useState("");
+  const [debouncedCodeFilter, setDebouncedCodeFilter] = useState("");
   const [debouncedAmountFilter, setDebouncedAmountFilter] = useState("");
   const initialFilterRequest = useRef(true);
 
@@ -218,6 +220,7 @@ export function Dashboard({ initialTransactions, initialFeed }: DashboardProps) 
     if (accountFilter !== "all") params.set("account", accountFilter);
     if (debouncedSearchQuery.trim()) params.set("search", debouncedSearchQuery.trim());
     if (debouncedSenderFilter.trim()) params.set("sender", debouncedSenderFilter.trim());
+    if (debouncedCodeFilter.trim()) params.set("code", debouncedCodeFilter.trim());
     if (debouncedAmountFilter.trim()) params.set("amount", debouncedAmountFilter.trim());
     if (remeseroFilter !== "all") params.set("remesero", remeseroFilter);
 
@@ -249,6 +252,7 @@ export function Dashboard({ initialTransactions, initialFeed }: DashboardProps) 
     customDateRange,
     dateFilter,
     debouncedAmountFilter,
+    debouncedCodeFilter,
     debouncedSearchQuery,
     debouncedSenderFilter,
     remeseroFilter,
@@ -700,10 +704,11 @@ export function Dashboard({ initialTransactions, initialFeed }: DashboardProps) 
     const timer = window.setTimeout(() => {
       setDebouncedSearchQuery(searchQuery);
       setDebouncedSenderFilter(senderFilter);
+      setDebouncedCodeFilter(codeFilter);
       setDebouncedAmountFilter(amountFilter);
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [amountFilter, searchQuery, senderFilter]);
+  }, [amountFilter, codeFilter, searchQuery, senderFilter]);
 
   useEffect(() => {
     if (initialFilterRequest.current) {
@@ -788,6 +793,8 @@ export function Dashboard({ initialTransactions, initialFeed }: DashboardProps) 
                   setSearchQuery={setSearchQuery}
                   senderFilter={senderFilter}
                   setSenderFilter={setSenderFilter}
+                  codeFilter={codeFilter}
+                  setCodeFilter={setCodeFilter}
                   amountFilter={amountFilter}
                   setAmountFilter={setAmountFilter}
                   remeseroFilter={remeseroFilter}
@@ -931,6 +938,8 @@ export function Dashboard({ initialTransactions, initialFeed }: DashboardProps) 
                     setSearchQuery={setSearchQuery}
                     senderFilter={senderFilter}
                     setSenderFilter={setSenderFilter}
+                    codeFilter={codeFilter}
+                    setCodeFilter={setCodeFilter}
                     amountFilter={amountFilter}
                     setAmountFilter={setAmountFilter}
                     remeseroFilter={remeseroFilter}

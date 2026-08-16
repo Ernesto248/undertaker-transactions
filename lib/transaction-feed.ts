@@ -21,6 +21,7 @@ export type TransactionFeedFilters = {
   account?: string;
   search?: string;
   sender?: string;
+  code?: string;
   amount?: number;
   remesero?: string;
   from?: string;
@@ -76,6 +77,11 @@ function buildBaseFilter(filters: TransactionFeedFilters): SqlFilter {
   }
   if (filters.sender) {
     result.clauses.push(`COALESCE(t.actor_name, '') ILIKE ${addValue(result, `%${filters.sender}%`)}`);
+  }
+  if (filters.code) {
+    result.clauses.push(
+      `STRPOS(LOWER(COALESCE(t.confirmation_code, '')), LOWER(${addValue(result, filters.code)})) > 0`,
+    );
   }
   if (filters.amount !== undefined) {
     result.clauses.push(`t.amount = ${addValue(result, filters.amount)}`);
