@@ -41,7 +41,7 @@ export function calculateCapitalTotal(input: {
   cashCup: number;
   usdCupRate: number | null;
   zelleUsd: number;
-  unpricedZelleUsd: number;
+  pendingAssignmentsUsd: number;
   remeserosNetCup: number;
   externalNetUsd: number;
   externalNetCup: number;
@@ -51,7 +51,7 @@ export function calculateCapitalTotal(input: {
   return (
     input.cashUsd +
     input.zelleUsd -
-    input.unpricedZelleUsd +
+    input.pendingAssignmentsUsd +
     input.externalNetUsd +
     (input.cashCup + input.remeserosNetCup + input.externalNetCup) /
       input.usdCupRate

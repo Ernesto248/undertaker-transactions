@@ -7,17 +7,17 @@ import {
 } from "@/lib/finances";
 
 describe("finance calculations", () => {
-  it("calculates net capital with USD, CUP, Zelle, remeseros and external debts", () => {
+  it("calculates net capital and reserves pending assignments independently from FIFO valuation", () => {
     expect(calculateCapitalTotal({
       cashUsd: 100,
       cashCup: 42000,
       usdCupRate: 420,
       zelleUsd: 500,
-      unpricedZelleUsd: 100,
+      pendingAssignmentsUsd: 50,
       remeserosNetCup: -84000,
       externalNetUsd: -50,
       externalNetCup: -42000,
-    })).toBe(250);
+    })).toBe(300);
   });
 
   it("does not calculate capital without a valid exchange rate", () => {
@@ -26,7 +26,7 @@ describe("finance calculations", () => {
       cashCup: 0,
       usdCupRate: null,
       zelleUsd: 0,
-      unpricedZelleUsd: 75,
+      pendingAssignmentsUsd: 75,
       remeserosNetCup: 0,
       externalNetUsd: 0,
       externalNetCup: 0,
