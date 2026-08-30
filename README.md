@@ -78,11 +78,12 @@ Authorization: Bearer <N8N_INGEST_API_KEY>
 
 A duplicate bank/confirmation-code pair returns HTTP 409 instead of creating a second financial record. See [n8n-guide.md](n8n-guide.md) and the example workflow in `n8n/workflows/`.
 
-## Quality checks
+## Verification
 
 ```bash
 pnpm build
-pnpm lint
 ```
+
+The production build validates TypeScript before generating the optimized application.
 
 No production customer records or credentials are stored in this repository.
