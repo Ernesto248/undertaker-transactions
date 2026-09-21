@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     }
 
     const gmailResult = await client.query(
-      "SELECT id FROM gmail_accounts WHERE id = $1 LIMIT 1",
+      "SELECT id FROM gmail_accounts WHERE id = $1 AND archived_at IS NULL LIMIT 1",
       [data.gmailAccountId],
     );
     if (!gmailResult.rows[0]?.id) {

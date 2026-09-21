@@ -255,6 +255,57 @@ describe("FinancesView", () => {
     expect(await screen.findByText("-10,000.5 CUP")).toBeTruthy();
   });
 
+  it("shows three recent expenses and exchanges until each history is expanded", async () => {
+    const historyOverview: FinanceOverview = {
+      ...overview,
+      expenses: Array.from({ length: 5 }, (_, index) => ({
+        id: `expense-${index + 1}`,
+        currency: "USD" as const,
+        amount: index + 1,
+        description: `Expense ${index + 1}`,
+        balanceBefore: 100 - index,
+        balanceAfter: 99 - index,
+        occurredAt: `2026-08-0${5 - index}T10:00:00.000Z`,
+        revertedAt: null,
+        revertedReason: null,
+      })),
+      exchanges: Array.from({ length: 5 }, (_, index) => ({
+        id: `exchange-${index + 1}`,
+        direction: "USD_TO_CUP" as const,
+        sourceAmount: 101 + index,
+        rate: 420,
+        targetAmount: (101 + index) * 420,
+        note: null,
+        occurredAt: `2026-08-0${5 - index}T10:00:00.000Z`,
+        revertedAt: null,
+        revertedReason: null,
+      })),
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, overview: historyOverview }),
+    }));
+
+    render(<FinancesView />);
+
+    const showExpenses = await screen.findByRole("button", { name: "Mostrar todos los gastos" });
+    const showExchanges = screen.getByRole("button", { name: "Mostrar todos los cambios de moneda" });
+    expect(showExpenses.getAttribute("aria-expanded")).toBe("false");
+    expect(showExchanges.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText("Expense 4")).toBeNull();
+    expect(screen.queryByText(/104 USD/)).toBeNull();
+
+    fireEvent.click(showExpenses);
+    fireEvent.click(showExchanges);
+    expect(await screen.findByText("Expense 4")).toBeTruthy();
+    expect(screen.getByText(/104 USD/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar solo los últimos 3 gastos" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar solo los últimos 3 cambios de moneda" }));
+    expect(screen.queryByText("Expense 4")).toBeNull();
+    expect(screen.queryByText(/104 USD/)).toBeNull();
+  });
+
   it("reverses an expense from its audit card", async () => {
     const activeExpense = {
       id: "42f1f24a-2594-4ddd-bbce-31f662c39ef2",

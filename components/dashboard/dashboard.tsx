@@ -458,6 +458,19 @@ export function Dashboard({ initialTransactions, initialFeed }: DashboardProps) 
     ]);
   };
 
+  const setAccountArchived = async (accountId: string, archived: boolean) => {
+    const res = await fetch(apiUrl(`/api/accounts/${accountId}`), {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ archived }),
+    });
+    if (!res.ok) return false;
+    setManualBanks([]);
+    setManualGmailAccounts([]);
+    await refreshAccounts();
+    return true;
+  };
+
   const revertAccountMovement = async (
     accountId: string,
     movementId: string,
@@ -660,8 +673,8 @@ export function Dashboard({ initialTransactions, initialFeed }: DashboardProps) 
     setLoadingManualOptions(true);
     try {
       const [banksRes, accountsRes] = await Promise.all([
-        fetch(apiUrl("/api/banks"), { cache: "no-store" }),
-        fetch(apiUrl("/api/gmail-accounts"), { cache: "no-store" }),
+        fetch(apiUrl("/api/banks?for=manual"), { cache: "no-store" }),
+        fetch(apiUrl("/api/gmail-accounts?status=active"), { cache: "no-store" }),
       ]);
 
       if (banksRes.ok) {
@@ -1042,6 +1055,7 @@ export function Dashboard({ initialTransactions, initialFeed }: DashboardProps) 
                 onLoadMovements={loadAccountMovements}
                 onCreateMovement={createAccountMovement}
                 onUpdateAccountOwnerConfig={updateAccountOwnerConfig}
+                onSetAccountArchived={setAccountArchived}
                 onRevertMovement={revertAccountMovement}
               />
             )}

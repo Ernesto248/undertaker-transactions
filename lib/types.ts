@@ -253,6 +253,7 @@ export type AccountMovementType = "wire" | "expense" | "owner_payment";
 export type AccountBalance = {
   id: string;
   accountName: string;
+  archivedAt?: string | null;
   incomingTotal: number;
   outgoingTotal: number;
   balance: number;

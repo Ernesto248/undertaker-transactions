@@ -2,6 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { Archive, ArchiveRestore, ChevronDown, ChevronUp } from "lucide-react";
 import { formatFinanceNumberInput, parseFinanceNumberInput } from "@/lib/finances";
 import type {
   AccountBalance,
@@ -70,6 +80,7 @@ type AccountsViewProps = {
     ownerFeePercent: number,
     note?: string,
   ) => Promise<boolean>;
+  onSetAccountArchived: (accountId: string, archived: boolean) => Promise<boolean>;
   onRevertMovement: (
     accountId: string,
     movementId: string,
@@ -88,6 +99,7 @@ export function AccountsView({
   onCreateMovement,
   onUpdateAccountOwnerConfig,
   onUpdateAccountOwnerFee,
+  onSetAccountArchived,
   onRevertMovement,
 }: AccountsViewProps) {
   const [expandedById, setExpandedById] = useState<Record<string, boolean>>({});
@@ -125,6 +137,9 @@ export function AccountsView({
   const [ownerDialogSalary, setOwnerDialogSalary] = useState("");
   const [ownerDialogOpening, setOwnerDialogOpening] = useState("");
   const [newOwnerName, setNewOwnerName] = useState("");
+  const [showArchivedAccounts, setShowArchivedAccounts] = useState(false);
+  const [archiveDialogAccount, setArchiveDialogAccount] = useState<AccountBalance | null>(null);
+  const [savingArchive, setSavingArchive] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -242,6 +257,10 @@ export function AccountsView({
     return { totalBalance, totalIncoming, totalOutgoing };
   }, [accounts]);
 
+  const activeAccounts = accounts.filter((account) => !account.archivedAt);
+  const archivedAccounts = accounts.filter((account) => account.archivedAt);
+  const visibleAccounts = showArchivedAccounts ? archivedAccounts : activeAccounts;
+
   const formatLocal = (amount: number) => {
     return new Intl.NumberFormat("es-DO", {
       minimumFractionDigits: 0,
@@ -357,18 +376,29 @@ export function AccountsView({
             Cuentas
           </h2>
           <p className="text-sm text-muted-foreground">
-            {accounts.length} cuentas · Saldo total:{" "}
+            {activeAccounts.length} activas · {archivedAccounts.length} archivadas · Saldo total:{" "}
             {formatLocal(totals.totalBalance)}
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onRefreshAccounts}
-          disabled={loadingAccounts}
-        >
-          {loadingAccounts ? "Actualizando..." : "Actualizar"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {archivedAccounts.length > 0 || showArchivedAccounts ? (
+            <Button
+              type="button"
+              variant={showArchivedAccounts ? "secondary" : "outline"}
+              onClick={() => setShowArchivedAccounts((current) => !current)}
+            >
+              {showArchivedAccounts ? "Ver activas" : `Ver archivadas (${archivedAccounts.length})`}
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onRefreshAccounts}
+            disabled={loadingAccounts}
+          >
+            {loadingAccounts ? "Actualizando..." : "Actualizar"}
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
@@ -420,7 +450,7 @@ export function AccountsView({
       </div>
 
       <div className="grid gap-4">
-        {accounts.map((account) => {
+        {visibleAccounts.map((account) => {
           const isExpanded = expandedById[account.id] === true;
           const draft = getDraft(account.id);
           const draftAmount = parseFinanceNumberInput(draft.amount);
@@ -458,16 +488,21 @@ export function AccountsView({
               <CardHeader className="pb-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <CardTitle className="text-base md:text-lg">
-                      {account.accountName}
-                    </CardTitle>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <CardTitle className="text-base md:text-lg">{account.accountName}</CardTitle>
+                      {account.archivedAt ? (
+                        <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-300">
+                          Archivada
+                        </span>
+                      ) : null}
+                    </div>
                     <p className="text-xs text-muted-foreground mt-1">
                       {account.transactionCount} transferencias · Ultima
                       entrada: {formatDate(account.lastTransactionAt)}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => {
+                    {!account.archivedAt ? <Button type="button" variant="outline" size="sm" onClick={() => {
                       setOwnerFeeDialogAccount(account);
                       setOwnerFeeDialogValue(account.ownerFeePercent == null ? "" : String(account.ownerFeePercent));
                       setOwnerDialogOwnerId(account.ownerId ?? "none");
@@ -477,11 +512,15 @@ export function AccountsView({
                       setOwnerFeeDialogNote("");
                     }}>
                       Configurar dueño
+                    </Button> : null}
+                    <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setArchiveDialogAccount(account)}>
+                      {account.archivedAt ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+                      {account.archivedAt ? "Restaurar" : "Archivar"}
                     </Button>
-                    <Button type="button" variant="ghost" size="sm" onClick={() => toggleExpanded(account.id)}>
+                    {!account.archivedAt ? <Button type="button" variant="ghost" size="sm" onClick={() => toggleExpanded(account.id)}>
                       {isExpanded ? "Contraer" : "Expandir"}
                       {isExpanded ? <ChevronUp className="ml-1 h-4 w-4" /> : <ChevronDown className="ml-1 h-4 w-4" />}
-                    </Button>
+                    </Button> : null}
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -892,16 +931,52 @@ export function AccountsView({
           );
         })}
 
-        {accounts.length === 0 && (
+        {visibleAccounts.length === 0 && (
           <Card className="border-border/70 bg-card/60">
             <CardContent className="py-10 text-center">
               <p className="text-muted-foreground">
-                No hay cuentas disponibles.
+                {showArchivedAccounts ? "No hay cuentas archivadas." : "No hay cuentas activas."}
               </p>
             </CardContent>
           </Card>
         )}
       </div>
+
+      <AlertDialog open={archiveDialogAccount != null} onOpenChange={(open) => { if (!open) setArchiveDialogAccount(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{archiveDialogAccount?.archivedAt ? "Restaurar cuenta" : "Archivar cuenta"}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {archiveDialogAccount?.archivedAt
+                ? `${archiveDialogAccount.accountName} volverá a estar disponible para transacciones manuales y operaciones nuevas.`
+                : `${archiveDialogAccount?.accountName ?? "La cuenta"} dejará de aparecer en las transacciones manuales. Su saldo, movimientos, FIFO e historial se conservarán.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={savingArchive}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={savingArchive || !archiveDialogAccount}
+              onClick={async (event) => {
+                event.preventDefault();
+                if (!archiveDialogAccount) return;
+                const archived = !archiveDialogAccount.archivedAt;
+                setSavingArchive(true);
+                try {
+                  const saved = await onSetAccountArchived(archiveDialogAccount.id, archived);
+                  if (saved) {
+                    if (!archived) setShowArchivedAccounts(false);
+                    setArchiveDialogAccount(null);
+                  }
+                } finally {
+                  setSavingArchive(false);
+                }
+              }}
+            >
+              {savingArchive ? "Guardando..." : archiveDialogAccount?.archivedAt ? "Restaurar" : "Archivar cuenta"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={ownerFeeDialogAccount != null} onOpenChange={(open) => { if (!open) setOwnerFeeDialogAccount(null); }}>
         <DialogContent>

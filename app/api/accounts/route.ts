@@ -62,6 +62,7 @@ function mapAccountRow(row: any): AccountBalance {
   return {
     id: String(row.id),
     accountName: String(row.accountName),
+    archivedAt: row.archivedAt ? new Date(row.archivedAt).toISOString() : null,
     incomingTotal: Number(row.incomingTotal ?? 0),
     outgoingTotal: Number(row.outgoingTotal ?? 0),
     balance: Number(row.balance ?? 0),
@@ -127,6 +128,7 @@ export async function GET(request: Request) {
       SELECT
         g.id,
         g.account_name as "accountName",
+        g.archived_at as "archivedAt",
         g.owner_fee_percent as "ownerFeePercent",
         g.account_owner_id as "ownerId",
         owner.name as "ownerName",
@@ -163,7 +165,7 @@ export async function GET(request: Request) {
         ${movementWhere}
         GROUP BY gmail_account_id
       ) m ON m.gmail_account_id = g.id
-      ORDER BY g.account_name ASC
+      ORDER BY g.archived_at NULLS FIRST, g.account_name ASC
       `,
       values,
     );
@@ -210,7 +212,7 @@ export async function POST(request: Request) {
 
     const accountResult = await client.query(
       `SELECT id, owner_fee_percent as "ownerFeePercent",
-              account_owner_id as "ownerId"
+              account_owner_id as "ownerId", archived_at as "archivedAt"
        FROM gmail_accounts WHERE id = $1 FOR UPDATE`,
       [parsed.data.accountId],
     );
@@ -220,6 +222,10 @@ export async function POST(request: Request) {
         { ok: false, error: "account_not_found" },
         { status: 404 },
       );
+    }
+    if (accountResult.rows[0].archivedAt) {
+      await client.query("ROLLBACK");
+      return Response.json({ ok: false, error: "account_archived" }, { status: 409 });
     }
 
     if (parsed.data.movementType === "wire") {

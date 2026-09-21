@@ -68,4 +68,14 @@ describe("GET /api/gmail-accounts", () => {
     expect(json.ok).toBe(true);
     expect(json.gmailAccounts).toEqual([]);
   });
+
+  it("excludes archived accounts from active manual options", async () => {
+    const GET = await loadHandler();
+    const query = vi.fn().mockResolvedValueOnce({ rows: [] });
+    connectMock.mockResolvedValue({ query, release: vi.fn() });
+
+    await GET(new Request("http://localhost/api/gmail-accounts?status=active"));
+
+    expect(String(query.mock.calls[0][0])).toContain("WHERE archived_at IS NULL");
+  });
 });

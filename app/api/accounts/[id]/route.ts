@@ -5,30 +5,59 @@ export const runtime = "nodejs";
 
 type Params = { params: Promise<{ id: string }> };
 
-const UpdateOwnerFeeSchema = z.object({
-  ownerFeePercent: z.number().finite().min(0).max(100),
-  note: z.string().trim().max(500).optional(),
-});
+const UpdateAccountSchema = z.union([
+  z.object({
+    archived: z.boolean(),
+  }).strict(),
+  z.object({
+    ownerFeePercent: z.number().finite().min(0).max(100),
+    note: z.string().trim().max(500).optional(),
+  }).strict(),
+]);
 
 export async function PATCH(request: Request, { params }: Params) {
   const parsedParams = z.object({ id: z.string().uuid() }).safeParse(await params);
-  const parsedBody = UpdateOwnerFeeSchema.safeParse(await request.json().catch(() => null));
+  const parsedBody = UpdateAccountSchema.safeParse(await request.json().catch(() => null));
+
   if (!parsedParams.success || !parsedBody.success) {
     return Response.json({ ok: false, error: "validation_error" }, { status: 400 });
   }
 
   const client = await getPool().connect();
+
   try {
     await client.query("BEGIN");
     const current = await client.query(
-      `SELECT owner_fee_percent as "ownerFeePercent"
-       FROM gmail_accounts WHERE id = $1 FOR UPDATE`,
+      `SELECT owner_fee_percent as "ownerFeePercent", archived_at as "archivedAt"
+       FROM gmail_accounts
+       WHERE id = $1
+       FOR UPDATE`,
       [parsedParams.data.id],
     );
+
     if (!current.rows[0]) {
       await client.query("ROLLBACK");
       return Response.json({ ok: false, error: "account_not_found" }, { status: 404 });
     }
+
+    if ("archived" in parsedBody.data) {
+      const updated = await client.query(
+        `UPDATE gmail_accounts
+         SET archived_at = CASE WHEN $2 THEN now() ELSE NULL END
+         WHERE id = $1
+         RETURNING archived_at as "archivedAt"`,
+        [parsedParams.data.id, parsedBody.data.archived],
+      );
+      await client.query("COMMIT");
+      return Response.json({
+        ok: true,
+        accountId: parsedParams.data.id,
+        archivedAt: updated.rows[0].archivedAt
+          ? new Date(updated.rows[0].archivedAt).toISOString()
+          : null,
+      });
+    }
+
     await client.query(
       `INSERT INTO gmail_account_owner_fee_changes
          (gmail_account_id, previous_percent, new_percent, note)
@@ -45,13 +74,16 @@ export async function PATCH(request: Request, { params }: Params) {
       [parsedParams.data.id, parsedBody.data.ownerFeePercent],
     );
     await client.query("COMMIT");
+
     return Response.json({
       ok: true,
       accountId: parsedParams.data.id,
       ownerFeePercent: parsedBody.data.ownerFeePercent,
     });
   } catch {
-    try { await client.query("ROLLBACK"); } catch {}
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
     return Response.json({ ok: false, error: "server_error" }, { status: 500 });
   } finally {
     client.release();

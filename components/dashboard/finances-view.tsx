@@ -95,6 +95,8 @@ const DEFAULT_MOVEMENT_DRAFT: MovementDraft = {
   note: "",
 };
 
+const RECENT_ACTIVITY_LIMIT = 3;
+
 function formatNumber(value: number) {
   return new Intl.NumberFormat("es-DO", {
     minimumFractionDigits: 0,
@@ -140,6 +142,8 @@ export function FinancesView() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [exchangeOpen, setExchangeOpen] = useState(false);
+  const [showAllExpenses, setShowAllExpenses] = useState(false);
+  const [showAllExchanges, setShowAllExchanges] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [savingExpense, setSavingExpense] = useState(false);
   const [savingExchange, setSavingExchange] = useState(false);
@@ -467,6 +471,8 @@ export function FinancesView() {
   }
 
   const { settings, totals, counterparties, settingChanges, expenses, exchanges } = overview;
+  const visibleExpenses = showAllExpenses ? expenses : expenses.slice(0, RECENT_ACTIVITY_LIMIT);
+  const visibleExchanges = showAllExchanges ? exchanges : exchanges.slice(0, RECENT_ACTIVITY_LIMIT);
   const hasRate = settings.usdCupRate !== null;
   const expenseAmountValue = parseFinanceNumberInput(expenseAmount);
   const selectedExpenseBalance = expenseCurrency === "USD" ? settings.cashUsd : settings.cashCup;
@@ -662,10 +668,34 @@ export function FinancesView() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="space-y-6">
           <Card>
-            <CardHeader><CardTitle>Gastos recientes</CardTitle></CardHeader>
-            <CardContent className="space-y-2">
+            <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+              <div>
+                <CardTitle>Gastos recientes</CardTitle>
+                {expenses.length > 0 ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {showAllExpenses ? `${expenses.length} registros` : `Últimos ${Math.min(expenses.length, RECENT_ACTIVITY_LIMIT)}`}
+                  </p>
+                ) : null}
+              </div>
+              {expenses.length > RECENT_ACTIVITY_LIMIT ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0 gap-1.5"
+                  aria-expanded={showAllExpenses}
+                  aria-controls="finance-expenses-list"
+                  aria-label={showAllExpenses ? "Mostrar solo los últimos 3 gastos" : "Mostrar todos los gastos"}
+                  onClick={() => setShowAllExpenses((current) => !current)}
+                >
+                  {showAllExpenses ? "Mostrar menos" : `Ver todos (${expenses.length})`}
+                  <ChevronDown className={cn("h-4 w-4 transition-transform", showAllExpenses && "rotate-180")} />
+                </Button>
+              ) : null}
+            </CardHeader>
+            <CardContent id="finance-expenses-list" className="space-y-2">
               {expenses.length === 0 ? <p className="text-sm text-muted-foreground">Sin gastos registrados.</p> : null}
-              {expenses.map((expense) => (
+              {visibleExpenses.map((expense) => (
                 <div
                   key={expense.id}
                   className={cn(
@@ -710,10 +740,34 @@ export function FinancesView() {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Cambios de moneda</CardTitle></CardHeader>
-            <CardContent className="space-y-2">
+            <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+              <div>
+                <CardTitle>Cambios de moneda</CardTitle>
+                {exchanges.length > 0 ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {showAllExchanges ? `${exchanges.length} registros` : `Últimos ${Math.min(exchanges.length, RECENT_ACTIVITY_LIMIT)}`}
+                  </p>
+                ) : null}
+              </div>
+              {exchanges.length > RECENT_ACTIVITY_LIMIT ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0 gap-1.5"
+                  aria-expanded={showAllExchanges}
+                  aria-controls="finance-exchanges-list"
+                  aria-label={showAllExchanges ? "Mostrar solo los últimos 3 cambios de moneda" : "Mostrar todos los cambios de moneda"}
+                  onClick={() => setShowAllExchanges((current) => !current)}
+                >
+                  {showAllExchanges ? "Mostrar menos" : `Ver todos (${exchanges.length})`}
+                  <ChevronDown className={cn("h-4 w-4 transition-transform", showAllExchanges && "rotate-180")} />
+                </Button>
+              ) : null}
+            </CardHeader>
+            <CardContent id="finance-exchanges-list" className="space-y-2">
               {exchanges.length === 0 ? <p className="text-sm text-muted-foreground">Sin cambios registrados.</p> : null}
-              {exchanges.map((exchange) => {
+              {visibleExchanges.map((exchange) => {
                 const sourceCurrency = exchange.direction === "USD_TO_CUP" ? "USD" : "CUP";
                 const targetCurrency = exchange.direction === "USD_TO_CUP" ? "CUP" : "USD";
                 return (

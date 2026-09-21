@@ -34,6 +34,7 @@ function renderAccountsView(onCreateMovement = vi.fn()) {
       onLoadMovements={vi.fn().mockResolvedValue(undefined)}
       onCreateMovement={onCreateMovement}
       onUpdateAccountOwnerFee={vi.fn().mockResolvedValue(true)}
+      onSetAccountArchived={vi.fn().mockResolvedValue(true)}
       onRevertMovement={vi.fn()}
     />,
   );
@@ -74,6 +75,40 @@ describe("AccountsView", () => {
 
     expect(screen.getAllByText("125.75").length).toBeGreaterThan(0);
     expect(screen.getAllByText("874.75").length).toBeGreaterThan(0);
+  });
+
+  it("archives active accounts and restores them from the archived view", async () => {
+    const onSetAccountArchived = vi.fn().mockResolvedValue(true);
+    render(
+      <AccountsView
+        accounts={[account, { ...account, id: "account-2", accountName: "Cuenta archivada", archivedAt: "2026-09-21T10:00:00.000Z" }]}
+        movementsByAccount={{}}
+        loadingAccounts={false}
+        loadingMovementsByAccount={{}}
+        onRefreshAccounts={vi.fn()}
+        onLoadMovements={vi.fn().mockResolvedValue(undefined)}
+        onCreateMovement={vi.fn()}
+        onUpdateAccountOwnerFee={vi.fn().mockResolvedValue(true)}
+        onSetAccountArchived={onSetAccountArchived}
+        onRevertMovement={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Cuenta principal")).toBeTruthy();
+    expect(screen.queryByText("Cuenta archivada")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Archivar" }));
+    await act(async () => {
+      fireEvent.click(await screen.findByRole("button", { name: "Archivar cuenta" }));
+    });
+    expect(onSetAccountArchived).toHaveBeenCalledWith("account-1", true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Ver archivadas (1)" }));
+    expect(screen.getByText("Cuenta archivada")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Restaurar" }));
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole("button", { name: "Restaurar" }).at(-1)!);
+    });
+    expect(onSetAccountArchived).toHaveBeenCalledWith("account-2", false);
   });
 
   it("shows the FIFO price and remaining inventory before creating a wire", async () => {

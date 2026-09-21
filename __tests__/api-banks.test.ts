@@ -70,4 +70,15 @@ describe("GET /api/banks", () => {
     expect(json.ok).toBe(true);
     expect(json.banks).toEqual([]);
   });
+
+  it("limits manual options to banks used by active accounts", async () => {
+    const GET = await loadHandler();
+    const query = vi.fn().mockResolvedValueOnce({ rows: [] });
+    connectMock.mockResolvedValue({ query, release: vi.fn() });
+
+    await GET(new Request("http://localhost/api/banks?for=manual"));
+
+    expect(String(query.mock.calls[0][0])).toContain("g.archived_at IS NULL");
+    expect(String(query.mock.calls[0][0])).toContain("t.bank_id = b.id");
+  });
 });
