@@ -45,6 +45,7 @@ export function calculateCapitalTotal(input: {
   remeserosNetCup: number;
   externalNetUsd: number;
   externalNetCup: number;
+  accountOwnerNetPayableUsd?: number;
 }): number | null {
   if (!input.usdCupRate || input.usdCupRate <= 0) return null;
 
@@ -52,7 +53,8 @@ export function calculateCapitalTotal(input: {
     input.cashUsd +
     input.zelleUsd -
     input.pendingAssignmentsUsd +
-    input.externalNetUsd +
+    input.externalNetUsd -
+    (input.accountOwnerNetPayableUsd ?? 0) +
     (input.cashCup + input.remeserosNetCup + input.externalNetCup) /
       input.usdCupRate
   );
@@ -90,6 +92,11 @@ export function emptyFinanceTotals(): FinanceOverviewTotals {
       payableCup: 0,
       netCup: 0,
       netCupUsd: null,
+    },
+    accountOwners: {
+      payableUsd: 0,
+      creditUsd: 0,
+      netPayableUsd: 0,
     },
     wireProfits: {
       lifetime: {

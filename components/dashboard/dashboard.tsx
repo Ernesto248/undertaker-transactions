@@ -400,15 +400,20 @@ export function Dashboard({ initialTransactions, initialFeed }: DashboardProps) 
     return true;
   };
 
-  const updateAccountOwnerFee = async (
+  const updateAccountOwnerConfig = async (
     accountId: string,
-    ownerFeePercent: number,
-    note?: string,
+    input: {
+      ownerId: string | null;
+      ownerFeePercent: number;
+      monthlySalaryUsd: number | null;
+      openingBalanceUsd?: number;
+      note?: string;
+    },
   ) => {
-    const res = await fetch(apiUrl(`/api/accounts/${accountId}`), {
+    const res = await fetch(apiUrl(`/api/accounts/${accountId}/owner`), {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ownerFeePercent, note }),
+      body: JSON.stringify(input),
     });
     if (!res.ok) return false;
     await refreshAccounts();
@@ -1036,7 +1041,7 @@ export function Dashboard({ initialTransactions, initialFeed }: DashboardProps) 
                 onRefreshAccounts={refreshAccounts}
                 onLoadMovements={loadAccountMovements}
                 onCreateMovement={createAccountMovement}
-                onUpdateAccountOwnerFee={updateAccountOwnerFee}
+                onUpdateAccountOwnerConfig={updateAccountOwnerConfig}
                 onRevertMovement={revertAccountMovement}
               />
             )}

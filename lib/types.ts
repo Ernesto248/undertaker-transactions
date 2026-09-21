@@ -248,7 +248,7 @@ export type RemeseroDetailData = {
   assignments: RemeseroDetailAssignment[];
 };
 
-export type AccountMovementType = "wire" | "expense";
+export type AccountMovementType = "wire" | "expense" | "owner_payment";
 
 export type AccountBalance = {
   id: string;
@@ -259,6 +259,9 @@ export type AccountBalance = {
   transactionCount: number;
   lastTransactionAt: string | null;
   ownerFeePercent: number | null;
+  ownerId?: string | null;
+  ownerName?: string | null;
+  ownerMonthlySalaryUsd?: number | null;
 };
 
 export type ZelleValuationSummary = {
@@ -320,6 +323,12 @@ export type WireFifoPreview = {
   selected: ZelleValuationSummary;
   remaining: ZelleValuationSummary;
   profit?: WireProfitSnapshot | null;
+  ownerDebt?: {
+    willAccrue: boolean;
+    ownerId: string | null;
+    ownerName: string | null;
+    amountUsd: number;
+  };
 };
 
 export type AccountMovement = {
@@ -467,6 +476,11 @@ export type FinanceOverviewTotals = {
     netCup: number;
     netCupUsd: number | null;
   };
+  accountOwners?: {
+    payableUsd: number;
+    creditUsd: number;
+    netPayableUsd: number;
+  };
   wireProfits: {
     lifetime: WireProfitPeriodSummary;
     currentMonth: WireProfitPeriodSummary;
@@ -505,4 +519,40 @@ export type FinanceOverview = {
   expenses: FinanceExpense[];
   cashMovements: FinanceCashMovement[];
   exchanges: FinanceCurrencyExchange[];
+  accountOwnerDebts?: AccountOwnerDebt[];
+};
+
+export type AccountOwnerDebtCategory =
+  | "COMMISSION"
+  | "SALARY"
+  | "OPENING"
+  | "MANUAL_ADJUSTMENT";
+
+export type AccountOwnerDebtMovement = {
+  id: string;
+  category: AccountOwnerDebtCategory;
+  movementType: "ACCRUAL" | "PAYMENT" | "ADJUSTMENT" | "REVERSAL";
+  amount: number;
+  signedDelta: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  note: string | null;
+  sourceType: string | null;
+  occurredAt: string;
+  reversedAt: string | null;
+};
+
+export type AccountOwnerDebt = {
+  accountId: string;
+  accountName: string;
+  ownerId: string;
+  ownerName: string;
+  isCurrentOwner: boolean;
+  monthlySalaryUsd: number | null;
+  balanceUsd: number;
+  commissionUsd: number;
+  salaryUsd: number;
+  openingUsd: number;
+  manualAdjustmentUsd: number;
+  movements: AccountOwnerDebtMovement[];
 };

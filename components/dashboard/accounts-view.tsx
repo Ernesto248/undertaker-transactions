@@ -55,7 +55,17 @@ type AccountsViewProps = {
     accountId: string,
     input: AccountMovementInput,
   ) => Promise<boolean>;
-  onUpdateAccountOwnerFee: (
+  onUpdateAccountOwnerConfig?: (
+    accountId: string,
+    input: {
+      ownerId: string | null;
+      ownerFeePercent: number;
+      monthlySalaryUsd: number | null;
+      openingBalanceUsd?: number;
+      note?: string;
+    },
+  ) => Promise<boolean>;
+  onUpdateAccountOwnerFee?: (
     accountId: string,
     ownerFeePercent: number,
     note?: string,
@@ -76,6 +86,7 @@ export function AccountsView({
   onRefreshAccounts,
   onLoadMovements,
   onCreateMovement,
+  onUpdateAccountOwnerConfig,
   onUpdateAccountOwnerFee,
   onRevertMovement,
 }: AccountsViewProps) {
@@ -109,6 +120,11 @@ export function AccountsView({
   const [ownerFeeDialogValue, setOwnerFeeDialogValue] = useState("");
   const [ownerFeeDialogNote, setOwnerFeeDialogNote] = useState("");
   const [savingOwnerFee, setSavingOwnerFee] = useState(false);
+  const [accountOwners, setAccountOwners] = useState<Array<{ id: string; name: string; archivedAt: string | null }>>([]);
+  const [ownerDialogOwnerId, setOwnerDialogOwnerId] = useState("none");
+  const [ownerDialogSalary, setOwnerDialogSalary] = useState("");
+  const [ownerDialogOpening, setOwnerDialogOpening] = useState("");
+  const [newOwnerName, setNewOwnerName] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -122,6 +138,19 @@ export function AccountsView({
       .catch(() => undefined);
     return () => { active = false; };
   }, []);
+
+  const loadAccountOwners = async () => {
+    try {
+      const response = await fetch("/api/finances/account-owners", { cache: "no-store" });
+      if (!response.ok) return;
+      const payload = await response.json() as { ok?: boolean; owners?: Array<{ id: string; name: string; archivedAt: string | null }> };
+      if (payload.ok && Array.isArray(payload.owners)) setAccountOwners(payload.owners);
+    } catch {
+      // The accounts list remains usable if the optional owner catalog is unavailable.
+    }
+  };
+
+  useEffect(() => { void loadAccountOwners(); }, []);
 
   useEffect(() => {
     const controllers: AbortController[] = [];
@@ -441,9 +470,13 @@ export function AccountsView({
                     <Button type="button" variant="outline" size="sm" onClick={() => {
                       setOwnerFeeDialogAccount(account);
                       setOwnerFeeDialogValue(account.ownerFeePercent == null ? "" : String(account.ownerFeePercent));
+                      setOwnerDialogOwnerId(account.ownerId ?? "none");
+                      setOwnerDialogSalary(account.ownerMonthlySalaryUsd == null ? "" : formatFinanceNumberInput(account.ownerMonthlySalaryUsd));
+                      setOwnerDialogOpening("");
+                      setNewOwnerName("");
                       setOwnerFeeDialogNote("");
                     }}>
-                      Configurar comisión
+                      Configurar dueño
                     </Button>
                     <Button type="button" variant="ghost" size="sm" onClick={() => toggleExpanded(account.id)}>
                       {isExpanded ? "Contraer" : "Expandir"}
@@ -451,6 +484,10 @@ export function AccountsView({
                     </Button>
                   </div>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Dueño: <strong className="text-foreground">{account.ownerName ?? "Sin asignar"}</strong>
+                  {account.ownerMonthlySalaryUsd != null ? ` · Salario ${formatLocal(account.ownerMonthlySalaryUsd)} USD/mes` : ""}
+                </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                   <div className="rounded-xl border border-border bg-background/70 px-3 py-2">
@@ -666,6 +703,13 @@ export function AccountsView({
                                 )}
                               </div>
                             ) : null}
+                            {fifoPreview.ownerDebt ? (
+                              <p className={`text-xs ${fifoPreview.ownerDebt.willAccrue ? "text-violet-300" : "text-amber-300"}`}>
+                                {fifoPreview.ownerDebt.willAccrue
+                                  ? `Se generará una deuda de ${formatLocal(fifoPreview.ownerDebt.amountUsd)} USD con ${fifoPreview.ownerDebt.ownerName}.`
+                                  : "La comisión será informativa porque esta cuenta no tiene dueño asignado."}
+                              </p>
+                            ) : null}
                             <p className="border-t border-border/60 pt-2 text-xs text-muted-foreground">
                               Quedarán {formatLocal(fifoPreview.remaining.balanceUsd)} USD
                               {fifoPreview.remaining.averagePrice == null
@@ -727,7 +771,7 @@ export function AccountsView({
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
                               <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
-                                {movement.movementType}
+                                {movement.movementType === "owner_payment" ? "PAGO DUEÑO" : movement.movementType}
                               </span>
                               <span className="text-sm font-semibold text-foreground">
                                 -{formatLocal(movement.totalDebitUsd ?? movement.amount)}
@@ -862,16 +906,43 @@ export function AccountsView({
       <Dialog open={ownerFeeDialogAccount != null} onOpenChange={(open) => { if (!open) setOwnerFeeDialogAccount(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Configurar comisión del dueño</DialogTitle>
+            <DialogTitle>Configurar dueño de la cuenta</DialogTitle>
             <DialogDescription>
-              Define el porcentaje predeterminado para {ownerFeeDialogAccount?.accountName}. El cambio quedará auditado.
+              Define dueño, comisión y salario para {ownerFeeDialogAccount?.accountName}. El cambio quedará auditado.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1">
+              <Label>Dueño</Label>
+              <Select value={ownerDialogOwnerId} onValueChange={setOwnerDialogOwnerId}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="none">Sin dueño</SelectItem>{accountOwners.filter((owner) => !owner.archivedAt).map((owner) => <SelectItem key={owner.id} value={owner.id}>{owner.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <Input value={newOwnerName} onChange={(event) => setNewOwnerName(event.target.value)} placeholder="Nombre de un dueño nuevo" />
+              <Button type="button" variant="outline" disabled={!newOwnerName.trim()} onClick={async () => {
+                const response = await fetch("/api/finances/account-owners", { method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify({name:newOwnerName.trim()}) });
+                if (!response.ok) return;
+                const payload = await response.json();
+                await loadAccountOwners();
+                setOwnerDialogOwnerId(payload.owner.id);
+                setNewOwnerName("");
+              }}>Crear</Button>
+            </div>
+            <div className="space-y-1">
               <Label>Porcentaje</Label>
               <Input inputMode="decimal" value={ownerFeeDialogValue} onChange={(event) => setOwnerFeeDialogValue(formatFinanceNumberInput(event.target.value))} placeholder="2" />
             </div>
+            <div className="space-y-1">
+              <Label>Salario mensual USD (opcional)</Label>
+              <Input inputMode="decimal" value={ownerDialogSalary} onChange={(event) => setOwnerDialogSalary(formatFinanceNumberInput(event.target.value))} placeholder="2,000" />
+            </div>
+            {ownerDialogOwnerId !== "none" ? <div className="space-y-1">
+              <Label>Saldo inicial USD (opcional)</Label>
+              <Input inputMode="decimal" value={ownerDialogOpening} onChange={(event) => setOwnerDialogOpening(formatFinanceNumberInput(event.target.value))} placeholder="Puede ser negativo" />
+              <p className="text-xs text-muted-foreground">Se registra como un movimiento nuevo; no reemplaza deudas anteriores.</p>
+            </div> : null}
             <div className="space-y-1">
               <Label>Nota (opcional)</Label>
               <Input value={ownerFeeDialogNote} onChange={(event) => setOwnerFeeDialogNote(event.target.value)} placeholder="Motivo del cambio" />
@@ -882,9 +953,21 @@ export function AccountsView({
             <Button type="button" disabled={savingOwnerFee} onClick={async () => {
               const value = parseFinanceNumberInput(ownerFeeDialogValue);
               if (!ownerFeeDialogAccount || !Number.isFinite(value) || value < 0 || value > 100) return;
+              const salary = ownerDialogSalary.trim() ? parseFinanceNumberInput(ownerDialogSalary) : null;
+              const opening = ownerDialogOpening.trim() ? parseFinanceNumberInput(ownerDialogOpening) : undefined;
+              if (salary !== null && (!Number.isFinite(salary) || salary < 0)) return;
+              if (opening !== undefined && !Number.isFinite(opening)) return;
               setSavingOwnerFee(true);
               try {
-                const saved = await onUpdateAccountOwnerFee(ownerFeeDialogAccount.id, value, ownerFeeDialogNote.trim() || undefined);
+                const saved = onUpdateAccountOwnerConfig
+                  ? await onUpdateAccountOwnerConfig(ownerFeeDialogAccount.id, {
+                  ownerId: ownerDialogOwnerId === "none" ? null : ownerDialogOwnerId,
+                  ownerFeePercent: value,
+                  monthlySalaryUsd: salary,
+                  openingBalanceUsd: opening,
+                  note: ownerFeeDialogNote.trim() || undefined,
+                  })
+                  : await onUpdateAccountOwnerFee?.(ownerFeeDialogAccount.id, value, ownerFeeDialogNote.trim() || undefined) ?? false;
                 if (saved) {
                   setDraftByAccount((previous) => ({
                     ...previous,

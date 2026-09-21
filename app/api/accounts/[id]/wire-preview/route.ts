@@ -49,8 +49,11 @@ export async function GET(request: Request, { params }: Params) {
 
   try {
     const accountResult = await client.query(
-      `SELECT owner_fee_percent as "ownerFeePercent"
-       FROM gmail_accounts WHERE id = $1`,
+      `SELECT a.owner_fee_percent as "ownerFeePercent",
+              a.account_owner_id as "ownerId", o.name as "ownerName"
+       FROM gmail_accounts a
+       LEFT JOIN account_owners o ON o.id = a.account_owner_id
+       WHERE a.id = $1`,
       [parsedParams.data.id],
     );
     if (!accountResult.rows[0]) {
@@ -116,6 +119,12 @@ export async function GET(request: Request, { params }: Params) {
           canCreate,
           error,
           profit,
+          ownerDebt: {
+            willAccrue: Boolean(accountResult.rows[0].ownerId) && (profit?.ownerFeeUsd ?? 0) > 0,
+            ownerId: accountResult.rows[0].ownerId == null ? null : String(accountResult.rows[0].ownerId),
+            ownerName: accountResult.rows[0].ownerName == null ? null : String(accountResult.rows[0].ownerName),
+            amountUsd: profit?.ownerFeeUsd ?? 0,
+          },
         },
       },
       { status: 200 },

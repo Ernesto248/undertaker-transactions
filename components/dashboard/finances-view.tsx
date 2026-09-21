@@ -54,6 +54,7 @@ import type {
   FinanceOverview,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { AccountOwnerDebtsPanel } from "@/components/dashboard/account-owner-debts-panel";
 
 type MovementDraft = {
   movementType: FinanceMovementType;
@@ -516,6 +517,11 @@ export function FinancesView() {
           <p className="mt-1 text-xs text-amber-300">
             Reserva incluida: -$ {formatNumber(totals.pendingAssignments.amountUsd)} USD por {totals.pendingAssignments.count} transaccion{totals.pendingAssignments.count === 1 ? "" : "es"} sin remesero.
           </p>
+          {(totals.accountOwners?.netPayableUsd ?? 0) !== 0 ? (
+            <p className="mt-1 text-xs text-violet-300">
+              Deuda neta con dueños incluida: -$ {formatNumber(totals.accountOwners?.netPayableUsd ?? 0)} USD.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -584,6 +590,12 @@ export function FinancesView() {
           </Card>
         ))}
       </div>
+
+      <AccountOwnerDebtsPanel
+        debts={overview.accountOwnerDebts ?? []}
+        totals={totals.accountOwners ?? { payableUsd: 0, creditUsd: 0, netPayableUsd: 0 }}
+        onChanged={loadOverview}
+      />
 
       <Card className="overflow-hidden border-sky-500/25 bg-gradient-to-br from-sky-500/10 via-card to-card">
         <CardHeader>

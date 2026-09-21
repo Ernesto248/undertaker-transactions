@@ -15,7 +15,11 @@ function mapMovementRow(row: any): AccountMovement {
   return {
     id: String(row.id),
     accountId: String(row.accountId),
-    movementType: row.movementType === "expense" ? "expense" : "wire",
+    movementType: row.movementType === "expense"
+      ? "expense"
+      : row.movementType === "owner_payment"
+        ? "owner_payment"
+        : "wire",
     amount: Number(row.amount ?? 0),
     note: row.note ? String(row.note) : null,
     createdAt: new Date(row.createdAt).toISOString(),

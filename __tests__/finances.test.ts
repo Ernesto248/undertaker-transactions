@@ -33,6 +33,31 @@ describe("finance calculations", () => {
     })).toBeNull();
   });
 
+  it("subtracts owner debt and adds owner credit to net capital", () => {
+    expect(calculateCapitalTotal({
+      cashUsd: 1_000,
+      cashCup: 0,
+      usdCupRate: 500,
+      zelleUsd: 500,
+      pendingAssignmentsUsd: 0,
+      remeserosNetCup: 0,
+      externalNetUsd: 0,
+      externalNetCup: 0,
+      accountOwnerNetPayableUsd: 200,
+    })).toBe(1_300);
+    expect(calculateCapitalTotal({
+      cashUsd: 1_000,
+      cashCup: 0,
+      usdCupRate: 500,
+      zelleUsd: 500,
+      pendingAssignmentsUsd: 0,
+      remeserosNetCup: 0,
+      externalNetUsd: 0,
+      externalNetCup: 0,
+      accountOwnerNetPayableUsd: -50,
+    })).toBe(1_550);
+  });
+
   it("keeps Miguel at 25 after +10, -5 and +20", () => {
     const balance =
       signedFinanceAmount("RECEIVABLE", 10) +

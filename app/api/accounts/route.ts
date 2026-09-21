@@ -5,6 +5,7 @@ import { ACTIVE_DEBT_DELTA_SQL, roundMoney } from "@/lib/finance-ledger";
 import type { AccountBalance, WireFifoSnapshot } from "@/lib/types";
 import { loadZelleInventories, previewWire } from "@/lib/zelle-inventory";
 import { calculateWireProfit } from "@/lib/wire-profit";
+import { insertOwnerDebtMovement } from "@/lib/account-owner-debt";
 
 export const runtime = "nodejs";
 
@@ -69,6 +70,9 @@ function mapAccountRow(row: any): AccountBalance {
       ? new Date(row.lastTransactionAt).toISOString()
       : null,
     ownerFeePercent: row.ownerFeePercent == null ? null : Number(row.ownerFeePercent),
+    ownerId: row.ownerId == null ? null : String(row.ownerId),
+    ownerName: row.ownerName == null ? null : String(row.ownerName),
+    ownerMonthlySalaryUsd: row.ownerMonthlySalaryUsd == null ? null : Number(row.ownerMonthlySalaryUsd),
   };
 }
 
@@ -124,6 +128,9 @@ export async function GET(request: Request) {
         g.id,
         g.account_name as "accountName",
         g.owner_fee_percent as "ownerFeePercent",
+        g.account_owner_id as "ownerId",
+        owner.name as "ownerName",
+        g.owner_monthly_salary_usd as "ownerMonthlySalaryUsd",
         (COALESCE(tx.total_incoming, 0) + COALESCE(g.incoming_adjustment, 0)) as "incomingTotal",
         (COALESCE(m.total_outgoing, 0) + COALESCE(g.outgoing_adjustment, 0)) as "outgoingTotal",
         (
@@ -133,6 +140,7 @@ export async function GET(request: Request) {
         COALESCE(tx.transaction_count, 0) as "transactionCount",
         tx.last_transaction_at as "lastTransactionAt"
       FROM gmail_accounts g
+      LEFT JOIN account_owners owner ON owner.id = g.account_owner_id
       LEFT JOIN (
         SELECT
           gmail_account_id,
@@ -201,7 +209,8 @@ export async function POST(request: Request) {
       : parsed.data.amount;
 
     const accountResult = await client.query(
-      `SELECT id, owner_fee_percent as "ownerFeePercent"
+      `SELECT id, owner_fee_percent as "ownerFeePercent",
+              account_owner_id as "ownerId"
        FROM gmail_accounts WHERE id = $1 FOR UPDATE`,
       [parsed.data.accountId],
     );
@@ -378,6 +387,31 @@ export async function POST(request: Request) {
       ],
     );
 
+    let ownerDebtMovementId: string | null = null;
+    const ownerFeeUsd = fifoValuation?.profit?.ownerFeeUsd ?? 0;
+    if (
+      parsed.data.movementType === "wire"
+      && accountResult.rows[0].ownerId
+      && ownerFeeUsd > 0
+    ) {
+      const ownerDebt = await insertOwnerDebtMovement(client, {
+        accountId: parsed.data.accountId,
+        ownerId: String(accountResult.rows[0].ownerId),
+        category: "COMMISSION",
+        movementType: "ACCRUAL",
+        signedDelta: ownerFeeUsd,
+        note: parsed.data.note ?? "Comisión de wire",
+        sourceType: "WIRE",
+        sourceId: movementId,
+      });
+      ownerDebtMovementId = ownerDebt.id;
+      await client.query(
+        `UPDATE account_outflow_movements
+         SET account_owner_debt_movement_id = $2 WHERE id = $1`,
+        [movementId, ownerDebtMovementId],
+      );
+    }
+
     await client.query("COMMIT");
 
     return Response.json(
@@ -385,6 +419,7 @@ export async function POST(request: Request) {
         ok: true,
         movementId,
         financeDebtMovementId,
+        ownerDebtMovementId,
         debtAmount,
         wireFeeUsd: parsed.data.movementType === "wire" ? wireFeeUsd : null,
         totalDebitUsd,
@@ -454,7 +489,9 @@ export async function DELETE(request: Request) {
     );
 
     const currentResult = await client.query(
-      `SELECT id, finance_debt_movement_id as "financeDebtMovementId"
+      `SELECT id, movement_type as "movementType",
+              finance_debt_movement_id as "financeDebtMovementId",
+              account_owner_debt_movement_id as "ownerDebtMovementId"
        FROM account_outflow_movements
        WHERE id = $1 AND reverted_at IS NULL FOR UPDATE`,
       [parsed.data.movementId],
@@ -481,6 +518,34 @@ export async function DELETE(request: Request) {
         await client.query("ROLLBACK");
         return Response.json({ ok: false, error: "linked_debt_already_reverted" }, { status: 409 });
       }
+    }
+
+    if (current.ownerDebtMovementId) {
+      const ownerDebtResult = await client.query(
+        `SELECT * FROM account_owner_debt_movements
+         WHERE id = $1 AND reversed_at IS NULL FOR UPDATE`,
+        [current.ownerDebtMovementId],
+      );
+      const ownerDebt = ownerDebtResult.rows[0];
+      if (!ownerDebt) {
+        await client.query("ROLLBACK");
+        return Response.json({ ok: false, error: "linked_owner_debt_already_reverted" }, { status: 409 });
+      }
+      await client.query(
+        `UPDATE account_owner_debt_movements
+         SET reversed_at = now(), reversed_reason = $2, updated_at = now()
+         WHERE id = $1`,
+        [ownerDebt.id, parsed.data.reason ?? "Salida revertida"],
+      );
+      await insertOwnerDebtMovement(client, {
+        accountId: String(ownerDebt.gmail_account_id),
+        ownerId: String(ownerDebt.owner_id),
+        category: ownerDebt.category,
+        movementType: "REVERSAL",
+        signedDelta: -Number(ownerDebt.signed_delta),
+        note: parsed.data.reason ?? "Salida revertida",
+        reversalOfId: String(ownerDebt.id),
+      });
     }
 
     await client.query(

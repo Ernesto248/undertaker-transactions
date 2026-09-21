@@ -17,6 +17,7 @@ import type {
   FinanceOverview,
   FinanceSettingChange,
   WireProfitPeriodSummary,
+  AccountOwnerDebt,
 } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -90,6 +91,29 @@ export async function GET(request?: Request) {
                     AND assignment.unassigned_at IS NULL
                 )
             ) pending_row) AS pending_assignments,
+            (SELECT COALESCE(json_agg(row_to_json(owner_debt_row)), '[]') FROM (
+              WITH relations AS (
+                SELECT gmail_account_id, owner_id FROM account_owner_debt_movements
+                UNION
+                SELECT id, account_owner_id FROM gmail_accounts WHERE account_owner_id IS NOT NULL
+              )
+              SELECT a.id as "accountId", a.account_name as "accountName",
+                     o.id as "ownerId", o.name as "ownerName",
+                     (a.account_owner_id = o.id) as "isCurrentOwner",
+                     CASE WHEN a.account_owner_id = o.id THEN a.owner_monthly_salary_usd ELSE NULL END as "monthlySalaryUsd",
+                     COALESCE(SUM(m.signed_delta), 0) as "balanceUsd",
+                     COALESCE(SUM(m.signed_delta) FILTER (WHERE m.category = 'COMMISSION'), 0) as "commissionUsd",
+                     COALESCE(SUM(m.signed_delta) FILTER (WHERE m.category = 'SALARY'), 0) as "salaryUsd",
+                     COALESCE(SUM(m.signed_delta) FILTER (WHERE m.category = 'OPENING'), 0) as "openingUsd",
+                     COALESCE(SUM(m.signed_delta) FILTER (WHERE m.category = 'MANUAL_ADJUSTMENT'), 0) as "manualAdjustmentUsd"
+              FROM relations r
+              JOIN gmail_accounts a ON a.id = r.gmail_account_id
+              JOIN account_owners o ON o.id = r.owner_id
+              LEFT JOIN account_owner_debt_movements m
+                ON m.gmail_account_id = r.gmail_account_id AND m.owner_id = r.owner_id
+              GROUP BY a.id, o.id
+              ORDER BY a.account_name, o.name
+            ) owner_debt_row) AS owner_debts,
             (SELECT COALESCE(json_agg(row_to_json(change_row)), '[]') FROM (
               SELECT id, field_name as "fieldName", previous_value as "previousValue",
                      new_value as "newValue", note, changed_at as "changedAt"
@@ -215,6 +239,7 @@ export async function GET(request?: Request) {
     const state = core.state ?? {};
     const remeseroRow = core.remeseros ?? {};
     const pendingAssignmentsRow = core.pending_assignments ?? {};
+    const ownerDebtRows = Array.isArray(core.owner_debts) ? core.owner_debts : [];
     const changesRows = Array.isArray(core.changes) ? core.changes : [];
     const expensesRows = Array.isArray(core.expenses) ? core.expenses : [];
     const exchangesRows = Array.isArray(core.exchanges) ? core.exchanges : [];
@@ -287,6 +312,26 @@ export async function GET(request?: Request) {
       count: toNumber(pendingAssignmentsRow.count),
       amountUsd: toNumber(pendingAssignmentsRow.amountUsd),
     };
+    const accountOwnerDebts: AccountOwnerDebt[] = ownerDebtRows.map((row: any) => ({
+      accountId: String(row.accountId),
+      accountName: String(row.accountName),
+      ownerId: String(row.ownerId),
+      ownerName: String(row.ownerName),
+      isCurrentOwner: Boolean(row.isCurrentOwner),
+      monthlySalaryUsd: row.monthlySalaryUsd == null ? null : toNumber(row.monthlySalaryUsd),
+      balanceUsd: toNumber(row.balanceUsd),
+      commissionUsd: toNumber(row.commissionUsd),
+      salaryUsd: toNumber(row.salaryUsd),
+      openingUsd: toNumber(row.openingUsd),
+      manualAdjustmentUsd: toNumber(row.manualAdjustmentUsd),
+      movements: [],
+    }));
+    const accountOwnerTotals = accountOwnerDebts.reduce((totals, item) => {
+      totals.payableUsd += Math.max(item.balanceUsd, 0);
+      totals.creditUsd += Math.max(-item.balanceUsd, 0);
+      return totals;
+    }, { payableUsd: 0, creditUsd: 0 });
+    const accountOwnerNetPayableUsd = accountOwnerTotals.payableUsd - accountOwnerTotals.creditUsd;
 
     const settingChanges: FinanceSettingChange[] = changesRows.map((row: any) => ({
       id: String(row.id),
@@ -344,6 +389,7 @@ export async function GET(request?: Request) {
       expenses,
       cashMovements,
       exchanges,
+      accountOwnerDebts,
       totals: {
         zelleUsd,
         zelleValuation: {
@@ -363,6 +409,10 @@ export async function GET(request?: Request) {
           netCup: externalNetCup,
           netCupUsd: rate ? externalNetCup / rate : null,
         },
+        accountOwners: {
+          ...accountOwnerTotals,
+          netPayableUsd: accountOwnerNetPayableUsd,
+        },
         wireProfits: {
           lifetime: mapWireProfitPeriod(wireProfitRows, "lifetime"),
           currentMonth: mapWireProfitPeriod(wireProfitRows, "month"),
@@ -376,6 +426,7 @@ export async function GET(request?: Request) {
           remeserosNetCup,
           externalNetUsd,
           externalNetCup,
+          accountOwnerNetPayableUsd,
         }),
       },
     };
