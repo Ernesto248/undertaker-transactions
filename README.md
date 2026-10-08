@@ -2,6 +2,10 @@
 
 Private financial-operations dashboard built with Next.js and PostgreSQL. This repository is the most complete public variant of a family of three production deployments used to centralize transaction intake, account balances, remittance-agent operations and financial reporting.
 
+**[Explore the interactive portfolio demo](https://leonardsolutions.dev/demos/transactions)** · [Portfolio case study](https://leonardsolutions.dev/#work)
+
+> **Demo boundary:** the portfolio experience runs with fictional data in the browser. It shows the intake, duplicate rejection, assignment and audit trail without connecting to this application's production database or processing real transactions.
+
 ## What it solves
 
 The system replaces fragmented manual processing with a single auditable workflow for:
@@ -22,6 +26,13 @@ The system replaces fragmented manual processing with a single auditable workflo
 - **FIFO valuation:** Zelle inventory is valued in order of consumption so wire profitability can be reported as exact, estimated or unavailable.
 - **Auditability:** assignment history, debt snapshots and transaction deletion events preserve the context needed to explain financial changes.
 - **Automation boundary:** n8n handles external email/workflow automation while the application owns validation, authorization and persistence.
+
+## What to try in the demo
+
+1. Inspect the initial transaction inbox and ledger balance.
+2. Ingest the prepared transaction, then repeat the same event to see duplicate detection.
+3. Assign a transaction and compare the ledger and audit history before and after.
+4. Reset the sandbox to return to the starting scenario.
 
 ## Technology
 
